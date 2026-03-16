@@ -1,5 +1,5 @@
 search:
-  description: Browse YouTube Music. Use `search_type: all` for unspecific browse or set `songs`, `artists`, or `playlists` for a specific browse mode.
+  description: "Browse YouTube Music. Use `search_type: all` for unspecific browse or set `songs`, `artists`, or `playlists` for a specific browse mode."
   fields:
     entity_id:
       required: true
@@ -27,7 +27,7 @@ search:
           max: 25
 
 resolve_stream:
-  description: Resolve a playable audio stream and metadata for a song, artist, or playlist item.
+  description: "Resolve a playable audio stream and metadata for a song, artist, or playlist item."
   fields:
     entity_id:
       required: true
@@ -48,7 +48,7 @@ resolve_stream:
         text:
 
 play:
-  description: Start playback of a resolved YouTube Music item on any target media player.
+  description: "Start playback of a resolved YouTube Music item on any target media player."
   fields:
     entity_id:
       required: true
@@ -74,7 +74,7 @@ play:
         text:
 
 stop:
-  description: Stop playback on the selected target media player.
+  description: "Stop playback on the selected target media player."
   fields:
     entity_id:
       required: true
@@ -88,7 +88,7 @@ stop:
           domain: media_player
 
 set_autoplay:
-  description: Enable or disable automatic playback of the next suggested YouTube Music track.
+  description: "Enable or disable automatic playback of the next suggested YouTube Music track."
   fields:
     entity_id:
       required: true
@@ -101,7 +101,7 @@ set_autoplay:
         boolean:
 
 set_shuffle:
-  description: Enable or disable shuffle for the upcoming queue and random initial selection where applicable.
+  description: "Enable or disable shuffle for the upcoming queue and random initial selection where applicable."
   fields:
     entity_id:
       required: true
@@ -114,7 +114,7 @@ set_shuffle:
         boolean:
 
 set_repeat_mode:
-  description: Set repeat mode for autoplay handling. Supported values: `off`, `once`, `forever`.
+  description: "Set repeat mode for autoplay handling. Supported values: `off`, `once`, `forever`."
   fields:
     entity_id:
       required: true
@@ -131,7 +131,7 @@ set_repeat_mode:
             - forever
 
 execute:
-  description: Unified programmatic entrypoint for scripts and automations. Supports text search, direct YouTube Music IDs, or a full YouTube Music URL, plus target player and playback modes in one call.
+  description: "Unified programmatic entrypoint for scripts and automations. Supports text search, direct YouTube Music IDs, or a full YouTube Music URL, plus target player and playback modes in one call."
   fields:
     entity_id:
       required: true

@@ -58,6 +58,9 @@ class YoutubeMusicConnectorBase extends HTMLElement {
       return true;
     }
     const attrs = state.attributes || {};
+    if (attrs.icon === "mdi:youtube-music") {
+      return true;
+    }
     return (
       Array.isArray(attrs.search_results)
       || Array.isArray(attrs.available_target_players)
@@ -68,7 +71,8 @@ class YoutubeMusicConnectorBase extends HTMLElement {
 
   _discoverConnectorEntity() {
     const candidates = Object.keys(this._hass?.states || {})
-      .filter((entityId) => entityId.startsWith("media_player.youtube_music_connector"))
+      .filter((entityId) => entityId.startsWith("media_player."))
+      .filter((entityId) => this._looksLikeConnectorEntity(entityId))
       .sort((left, right) => left.localeCompare(right, "de", { sensitivity: "base" }));
     return candidates[0] || "";
   }

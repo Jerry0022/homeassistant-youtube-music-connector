@@ -47,7 +47,43 @@ class YoutubeMusicConnectorPanel extends HTMLElement {
   }
 
   get _entity() {
-    return this._hass?.states?.["media_player.youtube_music_connector"];
+    const explicit = "media_player.youtube_music_connector";
+    if (this._looksLikeConnectorEntity(explicit)) {
+      return this._hass?.states?.[explicit];
+    }
+    const discovered = this._discoverConnectorEntity();
+    return discovered ? this._hass?.states?.[discovered] : undefined;
+  }
+
+  _looksLikeConnectorEntity(entityId) {
+    if (!entityId) {
+      return false;
+    }
+    const state = this._hass?.states?.[entityId];
+    if (!state) {
+      return false;
+    }
+    if (entityId.startsWith("media_player.youtube_music_connector")) {
+      return true;
+    }
+    const attrs = state.attributes || {};
+    if (attrs.icon === "mdi:youtube-music") {
+      return true;
+    }
+    return (
+      Array.isArray(attrs.search_results)
+      || Array.isArray(attrs.available_target_players)
+      || Object.prototype.hasOwnProperty.call(attrs, "current_item")
+      || Object.prototype.hasOwnProperty.call(attrs, "target_entity_id")
+    );
+  }
+
+  _discoverConnectorEntity() {
+    const candidates = Object.keys(this._hass?.states || {})
+      .filter((entityId) => entityId.startsWith("media_player."))
+      .filter((entityId) => this._looksLikeConnectorEntity(entityId))
+      .sort((left, right) => left.localeCompare(right, "de", { sensitivity: "base" }));
+    return candidates[0] || "";
   }
 
   disconnectedCallback() {
@@ -136,7 +172,7 @@ class YoutubeMusicConnectorPanel extends HTMLElement {
     this.render();
     try {
       await this._hass.callService("youtube_music_connector", "search", {
-        entity_id: "media_player.youtube_music_connector",
+        entity_id: this._entity?.entity_id || "media_player.youtube_music_connector",
         query,
         search_type: "all",
         limit,
@@ -164,7 +200,7 @@ class YoutubeMusicConnectorPanel extends HTMLElement {
     });
     try {
       await this._hass.callService("youtube_music_connector", "play", {
-        entity_id: "media_player.youtube_music_connector",
+        entity_id: this._entity?.entity_id || "media_player.youtube_music_connector",
         target_entity_id: target,
         item_type: itemType,
         item_id: itemId,
@@ -180,14 +216,14 @@ class YoutubeMusicConnectorPanel extends HTMLElement {
     this._draft.target = value;
     this._persistTargetPreference(value);
     await this._hass.callService("media_player", "select_source", {
-      entity_id: "media_player.youtube_music_connector",
+      entity_id: this._entity?.entity_id || "media_player.youtube_music_connector",
       source: value,
     });
   }
 
   async _transport(action) {
     await this._hass.callService("media_player", action, {
-      entity_id: "media_player.youtube_music_connector",
+      entity_id: this._entity?.entity_id || "media_player.youtube_music_connector",
     });
   }
 
@@ -207,7 +243,7 @@ class YoutubeMusicConnectorPanel extends HTMLElement {
     }
     try {
       await this._hass.callService("media_player", action, {
-        entity_id: "media_player.youtube_music_connector",
+        entity_id: this._entity?.entity_id || "media_player.youtube_music_connector",
       });
     } catch (error) {
       this._clearPendingPlayback();
@@ -712,14 +748,14 @@ class YoutubeMusicConnectorPanel extends HTMLElement {
 
   async _setAutoplay(enabled) {
     await this._hass.callService("youtube_music_connector", "set_autoplay", {
-      entity_id: "media_player.youtube_music_connector",
+      entity_id: this._entity?.entity_id || "media_player.youtube_music_connector",
       enabled,
     });
   }
 
   async _setShuffle(enabled) {
     await this._hass.callService("youtube_music_connector", "set_shuffle", {
-      entity_id: "media_player.youtube_music_connector",
+      entity_id: this._entity?.entity_id || "media_player.youtube_music_connector",
       shuffle_enabled: enabled,
     });
   }
@@ -727,7 +763,7 @@ class YoutubeMusicConnectorPanel extends HTMLElement {
   async _cycleRepeatMode(currentMode) {
     const nextMode = currentMode === "off" ? "forever" : currentMode === "forever" ? "once" : "off";
     await this._hass.callService("youtube_music_connector", "set_repeat_mode", {
-      entity_id: "media_player.youtube_music_connector",
+      entity_id: this._entity?.entity_id || "media_player.youtube_music_connector",
       repeat_mode: nextMode,
     });
   }
@@ -887,7 +923,7 @@ class YoutubeMusicConnectorPanel extends HTMLElement {
     this._setDraftSeek(position);
     this.render();
     await this._hass.callService("media_player", "media_seek", {
-      entity_id: "media_player.youtube_music_connector",
+      entity_id: this._entity?.entity_id || "media_player.youtube_music_connector",
       seek_position: Number(position),
     });
   }

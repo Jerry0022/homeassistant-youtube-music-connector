@@ -21,13 +21,21 @@ This repository contains two Home Assistant artifacts:
 
 ## Installation
 
-### Custom component
+### Option 1: Home Assistant app / add-on
+
+Add this GitHub repository to the Home Assistant app/add-on store as a repository, install `YouTube Music Connector Companion`, then start it once. The app copies the integration files into your Home Assistant `/config` directory so you can add the integration normally afterward.
+
+### Option 2: HACS custom repository
+
+Add this repository to HACS as an `Integration`, then install `YouTube Music Connector`.
+
+### Option 3: Manual install
 
 Copy `custom_components/youtube_music_connector` into your Home Assistant `custom_components` folder.
 
 ### Lovelace widget
 
-Copy `www/community/youtube-music-connector/youtube-music-connector.js` into your Home Assistant `www/community/youtube-music-connector/` folder and add this resource:
+If you install manually or through HACS, copy `www/community/youtube-music-connector/youtube-music-connector.js` into your Home Assistant `www/community/youtube-music-connector/` folder and add this resource:
 
 ```yaml
 url: /local/community/youtube-music-connector/youtube-music-connector.js
@@ -74,13 +82,12 @@ Supported repeat modes:
 - `once`
 - `forever`
 
-## Publishing
+## Repository Types
 
-This repository is structured so you can initialize Git directly at the root and publish it as its own GitHub repository.
+This repository now supports both Home Assistant installation paths:
 
-Recommended repository name:
-
-- `homeassistant-youtube-music-connector`
+- HACS custom integration repository
+- Home Assistant app / add-on repository via `repository.yaml`
 
 ## Documentation
 

@@ -35,11 +35,42 @@ class YoutubeMusicConnectorBase extends HTMLElement {
   }
 
   get integrationEntity() {
-    return this.config.entity || "media_player.youtube_music_connector";
+    const configured = this.config.entity || "media_player.youtube_music_connector";
+    if (this._looksLikeConnectorEntity(configured)) {
+      return configured;
+    }
+    return this._discoverConnectorEntity() || configured;
   }
 
   get entityState() {
     return this._hass?.states?.[this.integrationEntity];
+  }
+
+  _looksLikeConnectorEntity(entityId) {
+    if (!entityId) {
+      return false;
+    }
+    const state = this._hass?.states?.[entityId];
+    if (!state) {
+      return false;
+    }
+    if (entityId.startsWith("media_player.youtube_music_connector")) {
+      return true;
+    }
+    const attrs = state.attributes || {};
+    return (
+      Array.isArray(attrs.search_results)
+      || Array.isArray(attrs.available_target_players)
+      || Object.prototype.hasOwnProperty.call(attrs, "current_item")
+      || Object.prototype.hasOwnProperty.call(attrs, "target_entity_id")
+    );
+  }
+
+  _discoverConnectorEntity() {
+    const candidates = Object.keys(this._hass?.states || {})
+      .filter((entityId) => entityId.startsWith("media_player.youtube_music_connector"))
+      .sort((left, right) => left.localeCompare(right, "de", { sensitivity: "base" }));
+    return candidates[0] || "";
   }
 
   getCardSize() {

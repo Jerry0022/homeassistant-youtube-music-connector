@@ -24,6 +24,8 @@ jobs:
 
       - name: Validate Python syntax
         run: |
+          python -m py_compile scripts/bump_versions.py
+          python -m py_compile scripts/generate_branding_assets.py
           python -m py_compile custom_components/youtube_music_connector/__init__.py
           python -m py_compile custom_components/youtube_music_connector/auth_import.py
           python -m py_compile custom_components/youtube_music_connector/config_flow.py
@@ -37,3 +39,6 @@ jobs:
         run: |
           node --check custom_components/youtube_music_connector/frontend/youtube-music-connector-panel.js
           node --check www/community/youtube-music-connector/youtube-music-connector.js
+
+      - name: Validate aligned versions
+        run: python scripts/bump_versions.py --check

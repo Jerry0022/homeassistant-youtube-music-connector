@@ -1,0 +1,4 @@
+interface:
+  display_name: "Home Assistant YouTube Modern"
+  short_description: "Modern HA patterns for YouTube Music Connector"
+  default_prompt: "Use $homeassistant-youtube-modern to update the YouTube Music Connector repo with modern Home Assistant patterns and required version bumps."

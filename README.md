@@ -89,6 +89,18 @@ This repository now supports both Home Assistant installation paths:
 - HACS custom integration repository
 - Home Assistant app / add-on repository via `repository.yaml`
 
+## Updating
+
+### Integration updates
+
+- HACS: update through HACS and restart Home Assistant.
+- Manual or add-on installed files: re-run the companion add-on or recopy the files, then restart Home Assistant.
+
+### Add-on updates
+
+- Home Assistant detects new companion add-on releases from the add-on version in `youtube_music_connector_companion/config.yaml`.
+- This repository keeps the integration version and add-on version aligned so Home Assistant and HACS can detect package revisions consistently.
+
 ## Documentation
 
 Detailed integration documentation is available here:

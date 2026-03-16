@@ -3,13 +3,23 @@
 from __future__ import annotations
 
 import json
+import re
+import time
 from pathlib import Path
 from typing import Any
 
+from aiohttp import ClientError
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from ytmusicapi import YTMusic
 
-from .const import SUPPORTED_LANGUAGES
+from .const import SUPPORTED_LANGUAGES, YTM_API_KEY, YTM_BASE_API, YTM_DOMAIN, YTM_USER_AGENT
+
+FILTER_PARAMS = {
+    "songs": "EgWKAQIIAWoMEA4QChADEAQQCRAF",
+    "artists": "EgWKAQIgAWoMEA4QChADEAQQCRAF",
+    "playlists": "EgWKAQIoAWoMEA4QChADEAQQCRAF",
+}
 
 ALLOWED_BROWSER_HEADERS = {
     "accept",
@@ -45,9 +55,21 @@ class YoutubeMusicApiClient:
         self.hass = hass
         self.language = language if language in SUPPORTED_LANGUAGES else "de"
         self.header_path = Path(header_path)
+        self._session = async_get_clientsession(hass)
+        self._visitor_id: str | None = None
+        self._headers_cache: dict[str, str] | None = None
         self._ytmusic: YTMusic | None = None
 
     async def async_search(self, query: str, filter_name: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
+        body: dict[str, Any] = {"query": query}
+        if filter_name in FILTER_PARAMS:
+            body["params"] = FILTER_PARAMS[filter_name]
+
+        payload = await self._post("search", body)
+        items = self._parse_search_response(payload, filter_name, limit)
+        if items:
+            return items[:limit]
+
         client = await self.async_get_client()
         return await self.hass.async_add_executor_job(
             lambda: client.search(query=query, filter=filter_name, limit=limit)
@@ -92,14 +114,16 @@ class YoutubeMusicApiClient:
         steps.append("Header file loaded.")
 
         steps.append("Required browser headers verified.")
-        client = await self.async_get_client()
-        steps.append("YTMusic client initialized.")
 
-        results = await self.hass.async_add_executor_job(
-            lambda: client.search(query=query, filter="songs", limit=1)
+        headers = await self._build_headers()
+        payload = await self._post(
+            "search",
+            {"query": query, "params": FILTER_PARAMS["songs"]},
+            headers=headers,
         )
         steps.append("YouTube Music search request accepted.")
 
+        results = self._parse_search_response(payload, "songs", 1)
         if not results:
             steps.append("Search request succeeded but returned no song results.")
             raise HomeAssistantError("Search test completed but returned no song results.")
@@ -111,9 +135,12 @@ class YoutubeMusicApiClient:
         if self._ytmusic is not None:
             return self._ytmusic
 
-        self._load_browser_header_file()
+        headers = await self._build_headers()
+        headers = self._sanitize_ytmusic_headers(headers)
         try:
-            self._ytmusic = await self.hass.async_add_executor_job(lambda: YTMusic(str(self.header_path)))
+            self._ytmusic = await self.hass.async_add_executor_job(
+                lambda: YTMusic(auth=headers, language=self.language)
+            )
         except Exception as err:
             raise HomeAssistantError(f"Could not initialize YTMusic client: {err}") from err
         return self._ytmusic
@@ -145,6 +172,272 @@ class YoutubeMusicApiClient:
             )
 
         return headers
+
+    def _sanitize_ytmusic_headers(self, headers: dict[str, str]) -> dict[str, str]:
+        sanitized = dict(headers)
+        # requests does not reliably decode Brotli/Zstd without optional extras.
+        sanitized["accept-encoding"] = "gzip, deflate"
+        sanitized.setdefault("user-agent", YTM_USER_AGENT)
+        sanitized.setdefault("origin", sanitized.get("x-origin", YTM_DOMAIN))
+        sanitized.setdefault("referer", YTM_DOMAIN + "/")
+        return sanitized
+
+    async def _post(
+        self,
+        endpoint: str,
+        body: dict[str, Any],
+        headers: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        headers = headers or await self._build_headers()
+        request_body = {**body, **self._build_context(headers)}
+        url = f"{YTM_BASE_API}{endpoint}?alt=json&key={YTM_API_KEY}"
+        try:
+            async with self._session.post(url, json=request_body, headers=headers) as response:
+                payload = await response.json(content_type=None)
+                if response.status >= 400:
+                    error = payload.get("error", {}).get("message", response.reason or "unknown error")
+                    raise HomeAssistantError(
+                        f"Server returned HTTP {response.status}: {response.reason}. {error}"
+                    )
+                return payload
+        except ClientError as err:
+            raise HomeAssistantError(f"YouTube Music request failed: {err}") from err
+
+    async def _build_headers(self) -> dict[str, str]:
+        if self._headers_cache is not None:
+            return dict(self._headers_cache)
+
+        payload = self._load_browser_header_file()
+        headers = self._normalize_browser_headers(payload)
+        headers = await self._finalize_headers(headers)
+        self._headers_cache = headers
+        return dict(headers)
+
+    async def _finalize_headers(self, headers: dict[str, str]) -> dict[str, str]:
+        headers = dict(headers)
+        headers.setdefault("user-agent", YTM_USER_AGENT)
+        headers.setdefault("accept", "*/*")
+        headers.setdefault("content-type", "application/json")
+        headers.setdefault("origin", headers.get("x-origin", YTM_DOMAIN))
+        headers.setdefault("referer", YTM_DOMAIN + "/")
+        headers["accept-encoding"] = "gzip, deflate"
+        headers["x-goog-request-time"] = str(int(time.time()))
+        headers["x-goog-visitor-id"] = headers.get("x-goog-visitor-id") or await self._get_visitor_id()
+        return headers
+
+    def _build_context(self, headers: dict[str, str]) -> dict[str, Any]:
+        return {
+            "context": {
+                "client": {
+                    "clientName": "WEB_REMIX",
+                    "clientVersion": headers.get(
+                        "x-youtube-client-version",
+                        f"1.{time.strftime('%Y%m%d', time.gmtime())}.01.00",
+                    ),
+                    "hl": self.language,
+                },
+                "user": {},
+            }
+        }
+
+    async def _get_visitor_id(self) -> str:
+        if self._visitor_id:
+            return self._visitor_id
+        async with self._session.get(YTM_DOMAIN, headers={"user-agent": YTM_USER_AGENT, "accept": "*/*"}) as response:
+            text = await response.text()
+        matches = re.findall(r"ytcfg\.set\s*\(\s*({.+?})\s*\)\s*;", text)
+        if not matches:
+            raise HomeAssistantError("Could not retrieve YouTube Music visitor id")
+        ytcfg = json.loads(matches[0])
+        self._visitor_id = ytcfg.get("VISITOR_DATA", "")
+        if not self._visitor_id:
+            raise HomeAssistantError("YouTube Music visitor id is empty")
+        return self._visitor_id
+
+    def _parse_search_response(
+        self, payload: dict[str, Any], filter_name: str | None, limit: int
+    ) -> list[dict[str, Any]]:
+        items: list[dict[str, Any]] = []
+        for item in self._iter_music_responsive_items(payload):
+            parsed = self._parse_search_item(item, filter_name)
+            if parsed:
+                items.append(parsed)
+            if len(items) >= limit:
+                break
+        return items
+
+    def _iter_music_responsive_items(self, node: Any):
+        if isinstance(node, dict):
+            if "musicResponsiveListItemRenderer" in node:
+                yield node["musicResponsiveListItemRenderer"]
+            for value in node.values():
+                yield from self._iter_music_responsive_items(value)
+        elif isinstance(node, list):
+            for value in node:
+                yield from self._iter_music_responsive_items(value)
+
+    def _parse_search_item(self, renderer: dict[str, Any], filter_name: str | None) -> dict[str, Any] | None:
+        columns = self._extract_columns(renderer)
+        if not columns:
+            return None
+
+        title = columns[0]
+        subtitle = columns[1] if len(columns) > 1 else ""
+        browse_id = self._extract_browse_id(renderer)
+        video_id = self._extract_video_id(renderer)
+        playlist_id = self._extract_playlist_id(renderer)
+        thumbnails = self._extract_thumbnails(renderer)
+
+        if filter_name == "songs":
+            if video_id:
+                return {
+                    "resultType": "song",
+                    "videoId": video_id,
+                    "title": title,
+                    "artists": self._subtitle_to_artists(subtitle),
+                    "thumbnails": thumbnails,
+                    "browseId": browse_id,
+                    "playlistId": playlist_id,
+                }
+            return None
+        if filter_name == "artists":
+            if browse_id and (browse_id.startswith("UC") or browse_id.startswith("MPLA")):
+                return {
+                    "resultType": "artist",
+                    "browseId": browse_id,
+                    "artist": title,
+                    "title": title,
+                    "thumbnails": thumbnails,
+                }
+            return None
+        if filter_name == "playlists":
+            if playlist_id or (browse_id and browse_id.startswith(("VL", "RD", "OLAK", "MPRE"))):
+                resolved_playlist_id = playlist_id or (browse_id[2:] if browse_id.startswith("VL") else browse_id)
+                return {
+                    "resultType": "playlist",
+                    "browseId": browse_id,
+                    "playlistId": resolved_playlist_id,
+                    "title": title,
+                    "author": subtitle.split(" • ")[0] if subtitle else "",
+                    "thumbnails": thumbnails,
+                }
+            return None
+        return None
+
+    def _extract_columns(self, renderer: dict[str, Any]) -> list[str]:
+        columns: list[str] = []
+        for key in ("flexColumns", "fixedColumns"):
+            for column in renderer.get(key, []):
+                runs = column.get("musicResponsiveListItemFlexColumnRenderer", {}).get("text", {}).get("runs", [])
+                if not runs:
+                    runs = column.get("musicResponsiveListItemFixedColumnRenderer", {}).get("text", {}).get("runs", [])
+                text = "".join(run.get("text", "") for run in runs).strip()
+                if text:
+                    columns.append(text)
+        return columns
+
+    def _extract_browse_id(self, node: Any) -> str:
+        if isinstance(node, dict):
+            browse = node.get("browseEndpoint", {}).get("browseId")
+            if browse:
+                return browse
+            for value in node.values():
+                found = self._extract_browse_id(value)
+                if found:
+                    return found
+        elif isinstance(node, list):
+            for value in node:
+                found = self._extract_browse_id(value)
+                if found:
+                    return found
+        return ""
+
+    def _extract_video_id(self, node: Any) -> str:
+        if isinstance(node, dict):
+            watch = node.get("watchEndpoint", {}).get("videoId")
+            if watch:
+                return watch
+            overlay = (
+                node.get("overlay", {})
+                .get("musicItemThumbnailOverlayRenderer", {})
+                .get("content", {})
+                .get("musicPlayButtonRenderer", {})
+                .get("playNavigationEndpoint", {})
+                .get("watchEndpoint", {})
+                .get("videoId")
+            )
+            if overlay:
+                return overlay
+            for value in node.values():
+                found = self._extract_video_id(value)
+                if found:
+                    return found
+        elif isinstance(node, list):
+            for value in node:
+                found = self._extract_video_id(value)
+                if found:
+                    return found
+        return ""
+
+    def _extract_playlist_id(self, node: Any) -> str:
+        if isinstance(node, dict):
+            playlist_id = node.get("watchEndpoint", {}).get("playlistId")
+            if playlist_id:
+                return playlist_id
+            playlist_id = node.get("watchPlaylistEndpoint", {}).get("playlistId")
+            if playlist_id:
+                return playlist_id
+            for key, value in node.items():
+                if key in {
+                    "menu",
+                    "menuRenderer",
+                    "items",
+                    "menuNavigationItemRenderer",
+                    "menuServiceItemRenderer",
+                }:
+                    continue
+                found = self._extract_playlist_id(value)
+                if found:
+                    return found
+        elif isinstance(node, list):
+            for value in node:
+                found = self._extract_playlist_id(value)
+                if found:
+                    return found
+        return ""
+
+    def _extract_thumbnails(self, node: Any) -> list[dict[str, Any]]:
+        if isinstance(node, dict):
+            if "thumbnail" in node and isinstance(node["thumbnail"], dict):
+                thumbs = node["thumbnail"].get("musicThumbnailRenderer", {}).get("thumbnail", {}).get("thumbnails")
+                if thumbs:
+                    return thumbs
+                thumbs = node["thumbnail"].get("croppedSquareThumbnailRenderer", {}).get("thumbnail", {}).get("thumbnails")
+                if thumbs:
+                    return thumbs
+            if "thumbnails" in node and isinstance(node["thumbnails"], list):
+                return node["thumbnails"]
+            for value in node.values():
+                found = self._extract_thumbnails(value)
+                if found:
+                    return found
+        elif isinstance(node, list):
+            for value in node:
+                found = self._extract_thumbnails(value)
+                if found:
+                    return found
+        return []
+
+    def _subtitle_to_artists(self, subtitle: str) -> list[dict[str, Any]]:
+        parts = [part.strip() for part in subtitle.split("•") if part.strip()]
+        artists: list[dict[str, Any]] = []
+        for part in parts:
+            if part.isdigit():
+                continue
+            if ":" in part:
+                continue
+            artists.append({"name": part})
+        return artists
 
     def _parse_search_response(
         self, payload: dict[str, Any], filter_name: str | None, limit: int

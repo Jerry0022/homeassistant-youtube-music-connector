@@ -1,5 +1,5 @@
 name: YouTube Music Connector
-version: "0.3.16"
+version: "0.3.17"
 slug: youtube_music_connector_companion
 description: Install or update the YouTube Music Connector integration, sidebar panel, and Lovelace widget in Home Assistant.
 url: "https://github.com/Jerry0022/homeassistant-youtube-music-connector"

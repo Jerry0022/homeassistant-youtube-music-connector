@@ -1,5 +1,13 @@
 # Changelog
 
+## Update notes
+- After clicking `Update`, start the add-on once so the bundled integration files are copied into `/config`.
+- Restart Home Assistant after the add-on run.
+- Hard-reload the browser afterwards so Home Assistant picks up the latest frontend files.
+
+## 0.3.28
+- Add persistent update instructions above the changelog so the required post-update steps are always visible.
+
 ## 0.3.0
 - Add direct browser-auth import to the integration config flow.
 - Allow pasting `Copy as fetch`, raw request headers, or JSON without manually creating a `browser.json` file first.

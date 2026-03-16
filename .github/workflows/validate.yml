@@ -26,6 +26,7 @@ jobs:
         run: |
           python -m py_compile scripts/bump_versions.py
           python -m py_compile scripts/generate_branding_assets.py
+          python -m py_compile scripts/sync_addon_payload.py
           python -m py_compile custom_components/youtube_music_connector/__init__.py
           python -m py_compile custom_components/youtube_music_connector/auth_import.py
           python -m py_compile custom_components/youtube_music_connector/config_flow.py
@@ -42,3 +43,6 @@ jobs:
 
       - name: Validate aligned versions
         run: python scripts/bump_versions.py --check
+
+      - name: Validate add-on payload sync
+        run: python scripts/sync_addon_payload.py --check

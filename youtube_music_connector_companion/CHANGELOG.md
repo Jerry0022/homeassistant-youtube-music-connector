@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.3
+- Stop cloning GitHub at add-on runtime.
+- Install the bundled integration and Lovelace widget directly from the add-on package.
+- Add payload sync tooling so add-on releases ship the same files as the repository sources.
+
 ## 0.2.1
 - Rename the visible Home Assistant add-on to `YouTube Music Connector`.
 - Clarify in documentation that the repository already ships the sidebar panel UI and Lovelace widget.

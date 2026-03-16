@@ -1,0 +1,61 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "title": "YouTube Music Connector",
+        "description": "Nutze Browser-Auth ueber eine `browser.json`-Datei im Format der offiziellen Doku. Eine Schritt-fuer-Schritt-Anleitung findest du hier: [Browser Auth Guide]({browser_auth_guide_url})\n\nEmpfohlener Ablauf:\n1. Erzeuge eine `browser.json` nach der verlinkten Anleitung.\n2. Lege die Datei lokal in Home Assistant ab.\n3. Trage unten den vollstaendigen Pfad ein, zum Beispiel `{example_header_path}`.\n4. Klicke auf `Senden`. Der Flow testet die Verbindung direkt mit einer echten Songs-Suche.\n\nPflichtfelder in der Datei sind insbesondere `authorization`, `cookie`, `content-type`, `x-goog-authuser` und `x-origin`.\n\nBisher erfolgreich: `{validation_status}`\n\nLetzter Fehler: `{last_error}`",
+        "data": {
+          "name": "Name",
+          "language": "Sprache",
+          "header_path": "Header-Datei",
+          "default_target_media_player": "Standard-Zielplayer"
+        }
+      },
+      "reconfigure": {
+        "title": "YouTube Music Connector neu konfigurieren",
+        "description": "Passe Browser-Auth, Sprache oder den Standard-Zielplayer an. Der Flow fuehrt denselben Verbindungstest aus wie beim ersten Setup.\n\nGuide: [Browser Auth Guide]({browser_auth_guide_url})\n\nBeispielpfad: `{example_header_path}`\n\nBisher erfolgreich: `{validation_status}`\n\nLetzter Fehler: `{last_error}`",
+        "data": {
+          "name": "Name",
+          "language": "Sprache",
+          "header_path": "Header-Datei",
+          "default_target_media_player": "Standard-Zielplayer"
+        }
+      }
+    },
+    "error": {
+      "auth": "Browser-Auth oder der direkte Verbindungstest zu YouTube Music ist fehlgeschlagen.",
+      "already_configured": "Diese Header-Datei ist bereits fuer eine andere YouTube-Music-Connector-Instanz konfiguriert.",
+      "missing_header": "Ein gueltiger Pfad zur Header-Datei wird benoetigt.",
+      "no_results": "Der Verbindungstest war technisch erfolgreich, lieferte aber keine Songs zur Testsuche."
+    },
+    "abort": {
+      "already_configured": "Diese Header-Datei ist bereits fuer eine andere YouTube-Music-Connector-Instanz konfiguriert.",
+      "reconfigure_successful": "Die Integration wurde aktualisiert und der Verbindungstest war erfolgreich.",
+      "reconfigure_failed": "Die zu aktualisierende Integration konnte nicht gefunden werden."
+    }
+  },
+  "options": {
+    "error": {
+      "auth": "Browser-Auth oder der direkte Verbindungstest zu YouTube Music ist fehlgeschlagen.",
+      "already_configured": "Diese Header-Datei ist bereits fuer eine andere YouTube-Music-Connector-Instanz konfiguriert.",
+      "missing_header": "Ein gueltiger Pfad zur Header-Datei wird benoetigt.",
+      "no_results": "Der Verbindungstest war technisch erfolgreich, lieferte aber keine Songs zur Testsuche."
+    },
+    "step": {
+      "init": {
+        "title": "YouTube Music Connector Optionen",
+        "description": "Aendere Browser-Auth, Sprache oder den Standard-Zielplayer. Beim Speichern wird die Verbindung immer direkt getestet.\n\nGuide: [Browser Auth Guide]({browser_auth_guide_url})\n\nBeispielpfad: `{example_header_path}`\n\nBisher erfolgreich: `{validation_status}`\n\nLetzter Fehler: `{last_error}`",
+        "data": {
+          "name": "Name",
+          "language": "Sprache",
+          "header_path": "Header-Datei",
+          "default_target_media_player": "Standard-Zielplayer"
+        }
+      }
+    }
+  },
+  "panel": {
+    "title": "YouTube Music"
+  }
+}

@@ -39,6 +39,11 @@ These instructions apply to the whole repository.
 - Keep integration brand assets in `custom_components/youtube_music_connector/brand/`.
 - When updating the visual identity, regenerate all derived PNG files from `scripts/generate_branding_assets.py` so add-on and integration branding stay in sync.
 
+## Add-on payload rules
+- The companion add-on must install bundled files from `youtube_music_connector_companion/payload/`, not clone the repository at runtime.
+- After changing `custom_components/youtube_music_connector/` or `www/community/youtube-music-connector/`, run `python scripts/sync_addon_payload.py`.
+- Before finishing, verify payload sync with `python scripts/sync_addon_payload.py --check`.
+
 ## Documentation rules
 - Keep README practical and installation-focused.
 - Document both install channels:

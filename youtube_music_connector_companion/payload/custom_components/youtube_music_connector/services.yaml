@@ -1,0 +1,218 @@
+search:
+  description: Browse YouTube Music. Use `search_type: all` for unspecific browse or set `songs`, `artists`, or `playlists` for a specific browse mode.
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          domain: media_player
+    query:
+      required: true
+      selector:
+        text:
+    search_type:
+      required: false
+      selector:
+        select:
+          options:
+            - all
+            - songs
+            - artists
+            - playlists
+    limit:
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 25
+
+resolve_stream:
+  description: Resolve a playable audio stream and metadata for a song, artist, or playlist item.
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          domain: media_player
+    item_type:
+      required: true
+      selector:
+        select:
+          options:
+            - song
+            - artist
+            - playlist
+    item_id:
+      required: true
+      selector:
+        text:
+
+play:
+  description: Start playback of a resolved YouTube Music item on any target media player.
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          domain: media_player
+    target_entity_id:
+      required: false
+      selector:
+        entity:
+          domain: media_player
+    item_type:
+      required: true
+      selector:
+        select:
+          options:
+            - song
+            - artist
+            - playlist
+    item_id:
+      required: true
+      selector:
+        text:
+
+stop:
+  description: Stop playback on the selected target media player.
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          domain: media_player
+    target_entity_id:
+      required: false
+      selector:
+        entity:
+          domain: media_player
+
+set_autoplay:
+  description: Enable or disable automatic playback of the next suggested YouTube Music track.
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          domain: media_player
+    enabled:
+      required: true
+      selector:
+        boolean:
+
+set_shuffle:
+  description: Enable or disable shuffle for the upcoming queue and random initial selection where applicable.
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          domain: media_player
+    shuffle_enabled:
+      required: true
+      selector:
+        boolean:
+
+set_repeat_mode:
+  description: Set repeat mode for autoplay handling. Supported values: `off`, `once`, `forever`.
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          domain: media_player
+    repeat_mode:
+      required: true
+      selector:
+        select:
+          options:
+            - off
+            - once
+            - forever
+
+execute:
+  description: Unified programmatic entrypoint for scripts and automations. Supports text search, direct YouTube Music IDs, or a full YouTube Music URL, plus target player and playback modes in one call.
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          domain: media_player
+    target_entity_id:
+      required: false
+      selector:
+        entity:
+          domain: media_player
+    query:
+      required: false
+      selector:
+        text:
+    search_type:
+      required: false
+      selector:
+        select:
+          options:
+            - all
+            - songs
+            - artists
+            - playlists
+    limit:
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 25
+    play:
+      required: false
+      selector:
+        boolean:
+    item_type:
+      required: false
+      selector:
+        select:
+          options:
+            - song
+            - artist
+            - playlist
+    item_id:
+      required: false
+      selector:
+        text:
+    song_id:
+      required: false
+      selector:
+        text:
+    playlist_id:
+      required: false
+      selector:
+        text:
+    artist_id:
+      required: false
+      selector:
+        text:
+    youtube_url:
+      required: false
+      selector:
+        text:
+    autoplay_enabled:
+      required: false
+      selector:
+        boolean:
+    shuffle_enabled:
+      required: false
+      selector:
+        boolean:
+    repeat_mode:
+      required: false
+      selector:
+        select:
+          options:
+            - off
+            - once
+            - forever
+    volume_percent:
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 100

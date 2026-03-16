@@ -24,8 +24,9 @@ Keep changes HACS-compatible, add-on-repository-compatible, and versioned in the
 4. Prefer `python scripts/bump_versions.py --part <patch|minor|major>` instead of editing version strings manually.
 5. Keep the panel cache-busting query string aligned with the integration version.
 6. Keep add-on branding in `youtube_music_connector_companion/` and integration branding in `custom_components/youtube_music_connector/brand/`.
-7. If branding changes, regenerate the PNG files with `python scripts/generate_branding_assets.py`.
-8. Keep README instructions accurate for both installation paths:
+7. Keep the companion add-on payload synchronized with the shipped integration and Lovelace widget using `python scripts/sync_addon_payload.py`.
+8. If branding changes, regenerate the PNG files with `python scripts/generate_branding_assets.py`.
+9. Keep README instructions accurate for both installation paths:
    - HACS custom integration
    - Home Assistant add-on repository
 
@@ -42,5 +43,6 @@ Keep changes HACS-compatible, add-on-repository-compatible, and versioned in the
 - [ ] `AGENTS.md` rules were followed.
 - [ ] Integration and add-on versions were bumped together.
 - [ ] `python scripts/bump_versions.py --check` passes.
+- [ ] `python scripts/sync_addon_payload.py --check` passes.
 - [ ] Brand assets still exist in both shipped locations.
 - [ ] README still matches the actual install/update flow.

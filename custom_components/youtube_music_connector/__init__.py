@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from pathlib import Path
 
 import voluptuous as vol
 from aiohttp import web
@@ -51,11 +52,13 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    _log_runtime_diagnostics()
     hass.data.setdefault(DOMAIN, {})
     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry) -> bool:
+    _log_runtime_diagnostics()
     manager = YoutubeMusicConnectorManager(hass, entry)
     domain_data = hass.data.setdefault(DOMAIN, {})
     domain_data[entry.entry_id] = manager
@@ -328,3 +331,33 @@ class YoutubeMusicConnectorImportView(HomeAssistantView):
                 ),
             }
         )
+
+
+def _log_runtime_diagnostics() -> None:
+    manifest_version = "unknown"
+    manifest_path = Path(__file__).with_name("manifest.json")
+    try:
+        import json
+
+        manifest_version = json.loads(manifest_path.read_text(encoding="utf-8")).get("version", "unknown")
+    except Exception as err:  # pragma: no cover - diagnostics only
+        manifest_version = f"unreadable:{err.__class__.__name__}"
+
+    auth_import_path = Path(parse_browser_auth_input.__code__.co_filename)
+    diagnostics_marker = "missing"
+    try:
+        diagnostics_marker = (
+            "present"
+            if "Detected allowed keys" in auth_import_path.read_text(encoding="utf-8")
+            else "absent"
+        )
+    except Exception as err:  # pragma: no cover - diagnostics only
+        diagnostics_marker = f"unreadable:{err.__class__.__name__}"
+
+    _LOGGER.warning(
+        "Runtime diagnostics: package=%s manifest=%s auth_import=%s marker=%s",
+        __file__,
+        manifest_version,
+        auth_import_path,
+        diagnostics_marker,
+    )

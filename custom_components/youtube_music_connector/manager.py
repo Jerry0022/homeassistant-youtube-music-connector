@@ -491,6 +491,7 @@ class YoutubeMusicConnectorManager:
         return {
             "type": ITEM_TYPE_PLAYLIST,
             "id": item_id,
+            "browse_id": item.get("browseId", ""),
             "artist": owner,
             "title": "",
             "playlist_name": playlist_name,
@@ -656,10 +657,13 @@ class YoutubeMusicConnectorManager:
 
         if item_type == ITEM_TYPE_PLAYLIST:
             playlist_id = self._normalize_playlist_id(item_id)
-            playlist = await api.async_get_playlist(playlist_id, limit=25)
+            browse_id = self._search_index.get((item_type, item_id), {}).get("browse_id")
+            playlist = await api.async_get_playlist(playlist_id, limit=25, browse_id=browse_id)
             tracks = playlist.get("tracks") or []
             queue = [track for track in tracks if track.get("videoId") and track.get("videoId") != playable_id]
             context["playlist_id"] = playlist_id
+            if browse_id:
+                context["playlist_browse_id"] = browse_id
         else:
             queue = await api.async_get_up_next(playable_id, limit=12)
 
@@ -677,7 +681,8 @@ class YoutubeMusicConnectorManager:
 
         if item_type == ITEM_TYPE_PLAYLIST:
             playlist_id = self._normalize_playlist_id(item_id)
-            playlist = await api.async_get_playlist(playlist_id, limit=25)
+            browse_id = normalized.get("browse_id")
+            playlist = await api.async_get_playlist(playlist_id, limit=25, browse_id=browse_id)
             tracks = [track for track in (playlist.get("tracks") or []) if track.get("videoId")]
             track = self._pick_initial_track(tracks)
             playable_id = track.get("videoId", "")
@@ -910,7 +915,11 @@ class YoutubeMusicConnectorManager:
         source_type = self._autoplay_context.get("source_type")
         if source_type == ITEM_TYPE_PLAYLIST and self._autoplay_context.get("playlist_id"):
             if force or not self._autoplay_queue:
-                playlist = await api.async_get_playlist(self._autoplay_context["playlist_id"], limit=25)
+                playlist = await api.async_get_playlist(
+                    self._autoplay_context["playlist_id"],
+                    limit=25,
+                    browse_id=self._autoplay_context.get("playlist_browse_id"),
+                )
                 tracks = playlist.get("tracks") or []
                 queue = [
                     track for track in tracks if track.get("videoId") and track.get("videoId") != current_video_id

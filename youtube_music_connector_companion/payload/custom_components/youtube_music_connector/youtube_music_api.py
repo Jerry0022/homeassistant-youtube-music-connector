@@ -75,12 +75,33 @@ class YoutubeMusicApiClient:
             lambda: client.search(query=query, filter=filter_name, limit=limit)
         )
 
-    async def async_get_playlist(self, playlist_id: str, limit: int = 1) -> dict[str, Any]:
+    async def async_get_playlist(
+        self,
+        playlist_id: str,
+        limit: int = 1,
+        browse_id: str | None = None,
+    ) -> dict[str, Any]:
         client = await self.async_get_client()
         normalized = playlist_id[2:] if playlist_id.startswith("VL") else playlist_id
-        return await self.hass.async_add_executor_job(
-            lambda: client.get_playlist(playlistId=normalized, limit=limit)
-        )
+
+        def _fetch() -> dict[str, Any]:
+            playlist = client.get_playlist(playlistId=normalized, limit=limit)
+            tracks = playlist.get("tracks") or []
+            if tracks or not browse_id or not hasattr(client, "get_album"):
+                return playlist
+
+            album = client.get_album(browse_id)
+            return {
+                "id": normalized,
+                "title": album.get("title", playlist.get("title", "")),
+                "author": ", ".join(
+                    artist.get("name", "") for artist in (album.get("artists") or []) if artist.get("name")
+                ),
+                "thumbnails": album.get("thumbnails") or playlist.get("thumbnails") or [],
+                "tracks": album.get("tracks") or [],
+            }
+
+        return await self.hass.async_add_executor_job(_fetch)
 
     async def async_get_up_next(
         self,
@@ -459,16 +480,6 @@ class YoutubeMusicApiClient:
             if len(items) >= limit:
                 break
         return items
-
-    def _iter_music_responsive_items(self, node: Any):
-        if isinstance(node, dict):
-            if "musicResponsiveListItemRenderer" in node:
-                yield node["musicResponsiveListItemRenderer"]
-            for value in node.values():
-                yield from self._iter_music_responsive_items(value)
-        elif isinstance(node, list):
-            for value in node:
-                yield from self._iter_music_responsive_items(value)
 
     def _iter_playable_items(self, node: Any):
         if isinstance(node, dict):

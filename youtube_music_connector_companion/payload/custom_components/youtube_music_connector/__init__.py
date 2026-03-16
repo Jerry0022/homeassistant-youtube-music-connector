@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 from pathlib import Path
+import json
 
 import voluptuous as vol
 from aiohttp import web
@@ -49,6 +50,7 @@ from .manager import YoutubeMusicConnectorManager
 from .panel import async_register_panel, async_unregister_panel
 
 _LOGGER = logging.getLogger(__name__)
+INSTALL_STATE_PATH = Path("/config/.storage/youtube_music_connector_installer.json")
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
@@ -337,8 +339,6 @@ def _log_runtime_diagnostics() -> None:
     manifest_version = "unknown"
     manifest_path = Path(__file__).with_name("manifest.json")
     try:
-        import json
-
         manifest_version = json.loads(manifest_path.read_text(encoding="utf-8")).get("version", "unknown")
     except Exception as err:  # pragma: no cover - diagnostics only
         manifest_version = f"unreadable:{err.__class__.__name__}"
@@ -354,10 +354,18 @@ def _log_runtime_diagnostics() -> None:
     except Exception as err:  # pragma: no cover - diagnostics only
         diagnostics_marker = f"unreadable:{err.__class__.__name__}"
 
+    installer_state = "missing"
+    if INSTALL_STATE_PATH.exists():
+        try:
+            installer_state = json.dumps(json.loads(INSTALL_STATE_PATH.read_text(encoding="utf-8")), ensure_ascii=True)
+        except Exception as err:  # pragma: no cover - diagnostics only
+            installer_state = f"unreadable:{err.__class__.__name__}"
+
     _LOGGER.warning(
-        "Runtime diagnostics: package=%s manifest=%s auth_import=%s marker=%s",
+        "Runtime diagnostics: package=%s manifest=%s auth_import=%s marker=%s installer_state=%s",
         __file__,
         manifest_version,
         auth_import_path,
         diagnostics_marker,
+        installer_state,
     )

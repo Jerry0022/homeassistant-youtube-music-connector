@@ -108,9 +108,38 @@ def _parse_raw_headers(text: str) -> dict[str, str]:
                 pending_key = key
                 continue
 
+        # Some tools copy headers as "key value" on a single line without ":".
+        parts = raw_line.split(None, 1)
+        if len(parts) == 2 and _looks_like_header_name(parts[0]):
+            headers[parts[0]] = parts[1].strip()
+            continue
+
         pending_key = raw_line
+
+    headers.update(_extract_required_headers(text, headers))
 
     if not headers:
         raise HomeAssistantError("Could not parse any HTTP headers from the provided text.")
 
     return headers
+
+
+def _looks_like_header_name(value: str) -> bool:
+    return bool(re.fullmatch(r":?[A-Za-z0-9-]+", value))
+
+
+def _extract_required_headers(text: str, headers: dict[str, str]) -> dict[str, str]:
+    extracted: dict[str, str] = {}
+    for key in REQUIRED_BROWSER_HEADERS:
+        if headers.get(key):
+            continue
+        pattern = re.compile(
+            rf"(?im)^(?:{re.escape(key)}\s*:\s*(?P<inline>.+)|{re.escape(key)}\s*$\s*(?P<next>.+))$"
+        )
+        match = pattern.search(text)
+        if not match:
+            continue
+        value = (match.group("inline") or match.group("next") or "").strip()
+        if value:
+            extracted[key] = value
+    return extracted

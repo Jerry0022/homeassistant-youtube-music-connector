@@ -43,6 +43,9 @@ These instructions apply to the whole repository.
 - The companion add-on must install bundled files from `youtube_music_connector_companion/payload/`, not clone the repository at runtime.
 - After changing `custom_components/youtube_music_connector/` or `www/community/youtube-music-connector/`, run `python scripts/sync_addon_payload.py`.
 - Before finishing, verify payload sync with `python scripts/sync_addon_payload.py --check`.
+- Do not directly copy or patch repository files into a live Home Assistant config directory such as `H:\custom_components` or `H:\www`.
+- Treat the live Home Assistant installation as a deployment target, not a development workspace.
+- For add-on and integration changes, rely on the normal Home Assistant update/install flow instead of local filesystem injection unless the user explicitly asks for one-off emergency recovery.
 
 ## Documentation rules
 - Keep README practical and installation-focused.

@@ -29,6 +29,8 @@ Keep changes HACS-compatible, add-on-repository-compatible, and versioned in the
 9. Keep README instructions accurate for both installation paths:
    - HACS custom integration
    - Home Assistant add-on repository
+10. Do not update a live Home Assistant config directory directly just because it is reachable from the local machine.
+11. For real Home Assistant instances, assume deployment must happen through Home Assistant's own add-on or integration update mechanisms unless the user explicitly requests emergency manual repair.
 
 ## Implementation Rules
 
@@ -46,3 +48,4 @@ Keep changes HACS-compatible, add-on-repository-compatible, and versioned in the
 - [ ] `python scripts/sync_addon_payload.py --check` passes.
 - [ ] Brand assets still exist in both shipped locations.
 - [ ] README still matches the actual install/update flow.
+- [ ] No live Home Assistant installation was modified directly unless the user explicitly requested that emergency path.

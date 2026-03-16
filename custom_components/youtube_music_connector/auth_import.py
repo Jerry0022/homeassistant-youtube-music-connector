@@ -35,9 +35,13 @@ def parse_browser_auth_input(raw_text: str) -> dict[str, str]:
     missing = sorted(key for key in REQUIRED_BROWSER_HEADERS if not filtered.get(key))
     if missing:
         detected = ", ".join(sorted(filtered.keys())) or "none"
+        parsed = ", ".join(sorted(normalized.keys())) or "none"
+        line_count = len(text.splitlines())
+        char_count = len(text)
         raise HomeAssistantError(
             f"Imported browser auth is missing required keys: {', '.join(missing)}. "
-            f"Detected allowed keys: {detected}"
+            f"Detected allowed keys: {detected}. Parsed keys before filtering: {parsed}. "
+            f"Input size: {char_count} chars across {line_count} lines."
         )
 
     return filtered

@@ -67,6 +67,9 @@ class YoutubeMusicConnectorPanel extends HTMLElement {
       return true;
     }
     const attrs = state.attributes || {};
+    if (attrs.is_youtube_music_connector === true) {
+      return true;
+    }
     if (attrs.icon === "mdi:youtube-music") {
       return true;
     }

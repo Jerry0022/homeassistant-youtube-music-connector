@@ -148,6 +148,8 @@ class YoutubeMusicConnectorManager:
     def source_list(self) -> list[str]:
         sources: list[str] = []
         for state in self.hass.states.async_all("media_player"):
+            if state.entity_id == self._entity_id:
+                continue
             if state.entity_id.startswith("media_player.youtube_music_connector"):
                 continue
             if state.state in {STATE_UNAVAILABLE, STATE_UNKNOWN}:
@@ -209,6 +211,7 @@ class YoutubeMusicConnectorManager:
             "available_target_players": self.source_list,
             "current_item": self._current_item,
             "last_error": self._last_error,
+            "is_youtube_music_connector": True,
             "autoplay_enabled": self._autoplay_enabled,
             "autoplay_queue_length": len(self._autoplay_queue),
             "shuffle_enabled": self._shuffle_enabled,

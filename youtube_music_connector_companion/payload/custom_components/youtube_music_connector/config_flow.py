@@ -57,6 +57,11 @@ class YoutubeMusicConnectorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return await self._async_show_setup_form(CONFIG_STEP_USER)
 
         self.data.update(user_input)
+        self.data.setdefault(
+            CONF_HEADER_PATH,
+            self.hass.config.path(STORAGE_DIR, DEFAULT_IMPORT_FILENAME),
+        )
+        self.data.setdefault(CONF_BROWSER_AUTH_FILE_NAME, DEFAULT_IMPORT_FILENAME)
         header_path = await self._async_prepare_header_path()
         if not header_path:
             if not self._errors:
@@ -86,9 +91,18 @@ class YoutubeMusicConnectorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self.data = dict(entry.options or entry.data)
             self.data.setdefault(CONF_BROWSER_AUTH_INPUT, "")
             self.data.setdefault(CONF_BROWSER_AUTH_FILE_NAME, DEFAULT_IMPORT_FILENAME)
+            self.data.setdefault(
+                CONF_HEADER_PATH,
+                self.hass.config.path(STORAGE_DIR, DEFAULT_IMPORT_FILENAME),
+            )
             return await self._async_show_setup_form(CONFIG_STEP_RECONFIGURE)
 
         self.data.update(user_input)
+        self.data.setdefault(
+            CONF_HEADER_PATH,
+            self.hass.config.path(STORAGE_DIR, DEFAULT_IMPORT_FILENAME),
+        )
+        self.data.setdefault(CONF_BROWSER_AUTH_FILE_NAME, DEFAULT_IMPORT_FILENAME)
         header_path = await self._async_prepare_header_path()
         if not header_path:
             if not self._errors:
@@ -195,14 +209,6 @@ class YoutubeMusicConnectorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 default=self.data.get(CONF_BROWSER_AUTH_INPUT, ""),
             )
         ] = selector({"text": {"multiline": True, "type": "text"}})
-        if self.show_advanced_options:
-            data_schema[vol.Required(CONF_HEADER_PATH, default=self.data.get(CONF_HEADER_PATH, ""))] = str
-            data_schema[
-                vol.Optional(
-                    CONF_BROWSER_AUTH_FILE_NAME,
-                    default=self.data.get(CONF_BROWSER_AUTH_FILE_NAME, DEFAULT_IMPORT_FILENAME),
-                )
-            ] = str
         data_schema[
             vol.Optional(
                 CONF_DEFAULT_TARGET_MEDIA_PLAYER,
@@ -266,6 +272,7 @@ class YoutubeMusicConnectorOptionsFlow(config_entries.OptionsFlow):
         self.data = dict(config_entry.options or config_entry.data)
         self.data.setdefault(CONF_BROWSER_AUTH_INPUT, "")
         self.data.setdefault(CONF_BROWSER_AUTH_FILE_NAME, DEFAULT_IMPORT_FILENAME)
+        self.data.setdefault(CONF_HEADER_PATH, f"/config/.storage/{DEFAULT_IMPORT_FILENAME}")
         self._errors: dict[str, str] = {}
         self._last_error_detail = ""
         self._last_validation_status = "No test run yet."
@@ -273,6 +280,11 @@ class YoutubeMusicConnectorOptionsFlow(config_entries.OptionsFlow):
     async def async_step_init(self, user_input=None):
         if user_input is not None:
             self.data.update(user_input)
+            self.data.setdefault(
+                CONF_HEADER_PATH,
+                self.hass.config.path(STORAGE_DIR, DEFAULT_IMPORT_FILENAME),
+            )
+            self.data.setdefault(CONF_BROWSER_AUTH_FILE_NAME, DEFAULT_IMPORT_FILENAME)
             header_path = await self._async_prepare_header_path()
             if not header_path:
                 if not self._errors:
@@ -377,14 +389,6 @@ class YoutubeMusicConnectorOptionsFlow(config_entries.OptionsFlow):
                 default=self.data.get(CONF_BROWSER_AUTH_INPUT, ""),
             )
         ] = selector({"text": {"multiline": True, "type": "text"}})
-        if self.show_advanced_options:
-            schema[vol.Required(CONF_HEADER_PATH, default=self.data.get(CONF_HEADER_PATH, ""))] = str
-            schema[
-                vol.Optional(
-                    CONF_BROWSER_AUTH_FILE_NAME,
-                    default=self.data.get(CONF_BROWSER_AUTH_FILE_NAME, DEFAULT_IMPORT_FILENAME),
-                )
-            ] = str
         schema[
             vol.Optional(
                 CONF_DEFAULT_TARGET_MEDIA_PLAYER,

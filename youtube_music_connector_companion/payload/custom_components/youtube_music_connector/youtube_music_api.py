@@ -87,7 +87,25 @@ class YoutubeMusicApiClient:
         def _fetch() -> dict[str, Any]:
             playlist = client.get_playlist(playlistId=normalized, limit=limit)
             tracks = playlist.get("tracks") or []
-            if tracks or not browse_id or not hasattr(client, "get_album"):
+            if tracks:
+                return playlist
+
+            if hasattr(client, "get_watch_playlist"):
+                try:
+                    watch_playlist = client.get_watch_playlist(playlistId=normalized, limit=limit)
+                except Exception:
+                    watch_playlist = {}
+                watch_tracks = watch_playlist.get("tracks") or []
+                if watch_tracks:
+                    return {
+                        "id": normalized,
+                        "title": watch_playlist.get("title", playlist.get("title", "")),
+                        "author": playlist.get("author", ""),
+                        "thumbnails": playlist.get("thumbnails") or [],
+                        "tracks": watch_tracks,
+                    }
+
+            if not browse_id or not hasattr(client, "get_album"):
                 return playlist
 
             album = client.get_album(browse_id)

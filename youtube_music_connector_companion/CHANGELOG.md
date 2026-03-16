@@ -5,6 +5,9 @@
 - Restart Home Assistant after the add-on run.
 - Hard-reload the browser afterwards so Home Assistant picks up the latest frontend files.
 
+## 0.3.29
+- Improve playlist playback resolution by trying `get_watch_playlist(...)` before falling back to album-style lookup.
+
 ## 0.3.28
 - Add persistent update instructions above the changelog so the required post-update steps are always visible.
 

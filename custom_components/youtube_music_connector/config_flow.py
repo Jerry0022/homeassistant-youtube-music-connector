@@ -59,7 +59,8 @@ class YoutubeMusicConnectorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self.data.update(user_input)
         header_path = await self._async_prepare_header_path()
         if not header_path:
-            self._errors = {"base": ERROR_MISSING_HEADER}
+            if not self._errors:
+                self._errors = {"base": ERROR_MISSING_HEADER}
             return await self._async_show_setup_form(CONFIG_STEP_USER)
         self.data[CONF_HEADER_PATH] = header_path
 
@@ -90,7 +91,8 @@ class YoutubeMusicConnectorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self.data.update(user_input)
         header_path = await self._async_prepare_header_path()
         if not header_path:
-            self._errors = {"base": ERROR_MISSING_HEADER}
+            if not self._errors:
+                self._errors = {"base": ERROR_MISSING_HEADER}
             return await self._async_show_setup_form(CONFIG_STEP_RECONFIGURE)
         self.data[CONF_HEADER_PATH] = header_path
 
@@ -273,7 +275,8 @@ class YoutubeMusicConnectorOptionsFlow(config_entries.OptionsFlow):
             self.data.update(user_input)
             header_path = await self._async_prepare_header_path()
             if not header_path:
-                self._errors = {"base": ERROR_MISSING_HEADER}
+                if not self._errors:
+                    self._errors = {"base": ERROR_MISSING_HEADER}
             elif self._is_duplicate_header_path(header_path):
                 self._errors = {"base": "already_configured"}
                 self._last_validation_status = "Validation skipped because this header file is already configured."

@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "YouTube Music Connector",
-        "description": "Use browser auth via a `browser.json` file in the format described by the official documentation, or paste `Copy as fetch`, raw request headers, or compatible JSON directly below. A step-by-step guide is available here: [Browser Auth Guide]({browser_auth_guide_url})\n\nRecommended flow:\n1. Open [music.youtube.com](https://music.youtube.com) in your normal browser and sign in.\n2. Open the browser developer tools with `F12` (or `Ctrl+Shift+I`). Home Assistant cannot open DevTools automatically for you.\n3. In DevTools, open the `Network` tab and then use YouTube Music once, for example by searching for a song.\n4. In the network list, click a request whose URL contains `youtubei/v1/search` or `youtubei/v1/browse`.\n5. Right-click that request and choose `Copy` -> `Copy as fetch`. If your browser does not offer that menu item, copy the `Request Headers` instead.\n6. Paste that content below under `Browser auth import`. The flow saves the browser auth file automatically into `/config/.storage/`.\n7. Alternatively, keep using an existing file path such as `{example_header_path}`.\n8. Click `Submit`. The flow runs a real song search to verify the connection.\n\nRequired keys include `authorization`, `cookie`, `content-type`, `x-goog-authuser`, and `x-origin`.\n\nValidated so far: `{validation_status}`\n\nLast error: `{last_error}`",
+        "description": "Use browser auth from a real YouTube Music request. A step-by-step guide is available here: [Browser Auth Guide]({browser_auth_guide_url})\n\nRecommended flow:\n1. Open [music.youtube.com](https://music.youtube.com) in your normal browser and sign in.\n2. Open the browser developer tools with `F12` (or `Ctrl+Shift+I`).\n3. Open the `Network` tab.\n4. Use YouTube Music once, for example by searching for a song.\n5. Click a request whose URL contains `youtubei/v1/search` or `youtubei/v1/browse`.\n6. In that request, open the `Headers` section and copy the full `Request Headers`.\n7. Paste those headers below under `Browser auth import`.\n8. Click `Submit`. The flow stores the browser auth automatically and tests the connection immediately.\n\nThe copied headers must include `authorization`, `cookie`, `content-type`, `x-goog-authuser`, and `x-origin`.\n\nValidated so far: `{validation_status}`\n\nLast error: `{last_error}`",
         "data": {
           "name": "Name",
           "language": "Language",
@@ -16,7 +16,7 @@
       },
       "reconfigure": {
         "title": "Reconfigure YouTube Music Connector",
-        "description": "Update browser auth, language, or the default target player. You can use an existing file path or paste `Copy as fetch` or raw request headers directly. Open [music.youtube.com](https://music.youtube.com), sign in, press `F12`, go to `Network`, click a `youtubei/v1/search` or `youtubei/v1/browse` request, and use `Copy` -> `Copy as fetch`. This step runs the same connection test as the initial setup.\n\nGuide: [Browser Auth Guide]({browser_auth_guide_url})\n\nExample path: `{example_header_path}`\n\nValidated so far: `{validation_status}`\n\nLast error: `{last_error}`",
+        "description": "Update browser auth, language, or the default target player. Open [music.youtube.com](https://music.youtube.com), sign in, press `F12`, go to `Network`, click a `youtubei/v1/search` or `youtubei/v1/browse` request, open `Headers`, and copy the full `Request Headers`. This step runs the same connection test as the initial setup.\n\nGuide: [Browser Auth Guide]({browser_auth_guide_url})\n\nExample path: `{example_header_path}`\n\nValidated so far: `{validation_status}`\n\nLast error: `{last_error}`",
         "data": {
           "name": "Name",
           "language": "Language",
@@ -49,7 +49,7 @@
     "step": {
       "init": {
         "title": "YouTube Music Connector Options",
-        "description": "Update browser auth, language, or the default target player. You can paste `Copy as fetch`, raw request headers, or JSON directly; the flow then stores the browser auth file automatically. Open [music.youtube.com](https://music.youtube.com), sign in, press `F12`, go to `Network`, click a `youtubei/v1/search` or `youtubei/v1/browse` request, and use `Copy` -> `Copy as fetch`. Saving always runs a direct connection test.\n\nGuide: [Browser Auth Guide]({browser_auth_guide_url})\n\nExample path: `{example_header_path}`\n\nValidated so far: `{validation_status}`\n\nLast error: `{last_error}`",
+        "description": "Update browser auth, language, or the default target player. Open [music.youtube.com](https://music.youtube.com), sign in, press `F12`, go to `Network`, click a `youtubei/v1/search` or `youtubei/v1/browse` request, open `Headers`, and copy the full `Request Headers`. Saving always runs a direct connection test.\n\nGuide: [Browser Auth Guide]({browser_auth_guide_url})\n\nExample path: `{example_header_path}`\n\nValidated so far: `{validation_status}`\n\nLast error: `{last_error}`",
         "data": {
           "name": "Name",
           "language": "Language",

@@ -5,6 +5,9 @@
 - Restart Home Assistant after the add-on run.
 - Hard-reload the browser afterwards so Home Assistant picks up the latest frontend files.
 
+## 0.3.31
+- Harden panel and widget rendering against non-string values after playback state changes.
+
 ## 0.3.30
 - Prefer `get_watch_playlist(...)` when `get_playlist(...)` returns tracks without playable `videoId` values.
 

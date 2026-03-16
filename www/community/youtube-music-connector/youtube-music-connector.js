@@ -1404,14 +1404,14 @@ class YoutubeMusicConnectorBase extends HTMLElement {
   }
 
   _imageSrc(value) {
-    if (value) {
+    if (typeof value === "string" && value) {
       return value;
     }
     return "data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'%3E%3Crect width='96' height='96' rx='20' fill='%23242d39'/%3E%3Cpath d='M33 28v40l34-20-34-20z' fill='%23f15152'/%3E%3C/svg%3E";
   }
 
   _statusImageSrc(value, statusKind = "unknown_playback") {
-    if (value) {
+    if (typeof value === "string" && value) {
       return value;
     }
     if (statusKind === "idle_empty") {
@@ -1442,10 +1442,11 @@ class YoutubeMusicConnectorBase extends HTMLElement {
   }
 
   _displayResultCode(value) {
-    if (!value) {
+    const normalized = value == null ? "" : String(value);
+    if (!normalized) {
       return "";
     }
-    return value.length > 5 ? `${value.slice(0, 5)}...` : value;
+    return normalized.length > 5 ? `${normalized.slice(0, 5)}...` : normalized;
   }
 
   _activeResultFilters() {
@@ -1490,7 +1491,8 @@ class YoutubeMusicConnectorBase extends HTMLElement {
   }
 
   _escape(value) {
-    return (value || "").replace(/[&<>"']/g, (match) => ({
+    const normalized = value == null ? "" : String(value);
+    return normalized.replace(/[&<>"']/g, (match) => ({
       "&": "&amp;",
       "<": "&lt;",
       ">": "&gt;",

@@ -187,19 +187,20 @@ class YoutubeMusicConnectorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         data_schema[vol.Required(CONF_LANGUAGE, default=self.data.get(CONF_LANGUAGE, DEFAULT_LANGUAGE))] = selector(
             {"select": {"options": languages, "mode": "dropdown"}}
         )
-        data_schema[vol.Required(CONF_HEADER_PATH, default=self.data.get(CONF_HEADER_PATH, ""))] = str
-        data_schema[
-            vol.Optional(
-                CONF_BROWSER_AUTH_FILE_NAME,
-                default=self.data.get(CONF_BROWSER_AUTH_FILE_NAME, DEFAULT_IMPORT_FILENAME),
-            )
-        ] = str
         data_schema[
             vol.Optional(
                 CONF_BROWSER_AUTH_INPUT,
                 default=self.data.get(CONF_BROWSER_AUTH_INPUT, ""),
             )
         ] = selector({"text": {"multiline": True, "type": "text"}})
+        if self.show_advanced_options:
+            data_schema[vol.Required(CONF_HEADER_PATH, default=self.data.get(CONF_HEADER_PATH, ""))] = str
+            data_schema[
+                vol.Optional(
+                    CONF_BROWSER_AUTH_FILE_NAME,
+                    default=self.data.get(CONF_BROWSER_AUTH_FILE_NAME, DEFAULT_IMPORT_FILENAME),
+                )
+            ] = str
         data_schema[
             vol.Optional(
                 CONF_DEFAULT_TARGET_MEDIA_PLAYER,
@@ -367,19 +368,20 @@ class YoutubeMusicConnectorOptionsFlow(config_entries.OptionsFlow):
         schema[vol.Required(CONF_LANGUAGE, default=self.data.get(CONF_LANGUAGE, DEFAULT_LANGUAGE))] = selector(
             {"select": {"options": languages, "mode": "dropdown"}}
         )
-        schema[vol.Required(CONF_HEADER_PATH, default=self.data.get(CONF_HEADER_PATH, ""))] = str
-        schema[
-            vol.Optional(
-                CONF_BROWSER_AUTH_FILE_NAME,
-                default=self.data.get(CONF_BROWSER_AUTH_FILE_NAME, DEFAULT_IMPORT_FILENAME),
-            )
-        ] = str
         schema[
             vol.Optional(
                 CONF_BROWSER_AUTH_INPUT,
                 default=self.data.get(CONF_BROWSER_AUTH_INPUT, ""),
             )
         ] = selector({"text": {"multiline": True, "type": "text"}})
+        if self.show_advanced_options:
+            schema[vol.Required(CONF_HEADER_PATH, default=self.data.get(CONF_HEADER_PATH, ""))] = str
+            schema[
+                vol.Optional(
+                    CONF_BROWSER_AUTH_FILE_NAME,
+                    default=self.data.get(CONF_BROWSER_AUTH_FILE_NAME, DEFAULT_IMPORT_FILENAME),
+                )
+            ] = str
         schema[
             vol.Optional(
                 CONF_DEFAULT_TARGET_MEDIA_PLAYER,

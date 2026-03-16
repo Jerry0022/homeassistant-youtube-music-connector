@@ -1,8 +1,6 @@
 #!/usr/bin/with-contenv bashio
 set -euo pipefail
 
-OVERWRITE_EXISTING="$(bashio::config 'overwrite_existing')"
-
 INTEGRATION_SOURCE="/payload/custom_components/youtube_music_connector"
 LOVELACE_SOURCE="/payload/www/community/youtube-music-connector/youtube-music-connector.js"
 INTEGRATION_TARGET="/config/custom_components/youtube_music_connector"
@@ -18,11 +16,7 @@ copy_tree() {
     local source="$1"
     local target="$2"
 
-    if bashio::var.true "${OVERWRITE_EXISTING}"; then
-        rm -rf "$target"
-    elif [ -e "$target" ]; then
-        bashio::log.fatal "Target already exists and overwrite_existing is false: $target"
-    fi
+    rm -rf "$target"
 
     mkdir -p "$(dirname "$target")"
     cp -R "$source" "$target"
@@ -32,11 +26,7 @@ copy_file() {
     local source="$1"
     local target="$2"
 
-    if bashio::var.true "${OVERWRITE_EXISTING}"; then
-        rm -f "$target"
-    elif [ -e "$target" ]; then
-        bashio::log.fatal "Target already exists and overwrite_existing is false: $target"
-    fi
+    rm -f "$target"
 
     mkdir -p "$(dirname "$target")"
     cp "$source" "$target"

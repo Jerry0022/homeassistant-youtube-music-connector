@@ -5,6 +5,9 @@
 - Restart Home Assistant after the add-on run.
 - Hard-reload the browser afterwards so Home Assistant picks up the latest frontend files.
 
+## 0.3.32
+- Remove the user-facing `overwrite_existing` option and always overwrite installed files during add-on runs.
+
 ## 0.3.31
 - Harden panel and widget rendering against non-string values after playback state changes.
 

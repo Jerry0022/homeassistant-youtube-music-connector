@@ -48,6 +48,11 @@ The integration uses browser authentication via a `browser.json` file. The expec
 
 - [ytmusicapi browser setup](https://ytmusicapi.readthedocs.io/en/stable/setup/browser.html)
 
+The config flow now supports two setup paths:
+
+- Paste `Copy as fetch`, raw request headers, or compatible JSON directly into the dialog. The integration stores the browser auth automatically in `/config/.storage/`.
+- Or keep using an existing `browser.json` path if you already have one.
+
 Required keys:
 
 - `authorization`

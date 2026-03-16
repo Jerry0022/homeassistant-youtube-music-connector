@@ -4,22 +4,26 @@
     "step": {
       "user": {
         "title": "YouTube Music Connector",
-        "description": "Nutze Browser-Auth ueber eine `browser.json`-Datei im Format der offiziellen Doku. Eine Schritt-fuer-Schritt-Anleitung findest du hier: [Browser Auth Guide]({browser_auth_guide_url})\n\nEmpfohlener Ablauf:\n1. Erzeuge eine `browser.json` nach der verlinkten Anleitung.\n2. Lege die Datei lokal in Home Assistant ab.\n3. Trage unten den vollstaendigen Pfad ein, zum Beispiel `{example_header_path}`.\n4. Klicke auf `Senden`. Der Flow testet die Verbindung direkt mit einer echten Songs-Suche.\n\nPflichtfelder in der Datei sind insbesondere `authorization`, `cookie`, `content-type`, `x-goog-authuser` und `x-origin`.\n\nBisher erfolgreich: `{validation_status}`\n\nLetzter Fehler: `{last_error}`",
+        "description": "Nutze Browser-Auth ueber eine `browser.json`-Datei im Format der offiziellen Doku oder fuege unten direkt `Copy as fetch`, rohe Request-Header oder ein passendes JSON ein. Eine Schritt-fuer-Schritt-Anleitung findest du hier: [Browser Auth Guide]({browser_auth_guide_url})\n\nEmpfohlener Ablauf:\n1. Oeffne music.youtube.com in deinem normalen Browser und melde dich an.\n2. Kopiere aus DevTools entweder `Copy as fetch` oder die `Request Headers` eines authentifizierten `youtubei/v1`-Requests.\n3. Fuege den Inhalt unten bei `Browser-Auth-Import` ein. Der Flow speichert die Datei automatisch unter `/config/.storage/`.\n4. Alternativ kannst du weiter einen bestehenden Dateipfad wie `{example_header_path}` eintragen.\n5. Klicke auf `Senden`. Der Flow testet die Verbindung direkt mit einer echten Songs-Suche.\n\nPflichtfelder sind insbesondere `authorization`, `cookie`, `content-type`, `x-goog-authuser` und `x-origin`.\n\nBisher erfolgreich: `{validation_status}`\n\nLetzter Fehler: `{last_error}`",
         "data": {
           "name": "Name",
           "language": "Sprache",
           "header_path": "Header-Datei",
-          "default_target_media_player": "Standard-Zielplayer"
+          "default_target_media_player": "Standard-Zielplayer",
+          "browser_auth_file_name": "Dateiname fuer Browser-Auth-Import",
+          "browser_auth_input": "Browser-Auth-Import"
         }
       },
       "reconfigure": {
         "title": "YouTube Music Connector neu konfigurieren",
-        "description": "Passe Browser-Auth, Sprache oder den Standard-Zielplayer an. Der Flow fuehrt denselben Verbindungstest aus wie beim ersten Setup.\n\nGuide: [Browser Auth Guide]({browser_auth_guide_url})\n\nBeispielpfad: `{example_header_path}`\n\nBisher erfolgreich: `{validation_status}`\n\nLetzter Fehler: `{last_error}`",
+        "description": "Passe Browser-Auth, Sprache oder den Standard-Zielplayer an. Du kannst einen bestehenden Dateipfad verwenden oder direkt `Copy as fetch` bzw. rohe Request-Header einfuegen. Der Flow fuehrt denselben Verbindungstest aus wie beim ersten Setup.\n\nGuide: [Browser Auth Guide]({browser_auth_guide_url})\n\nBeispielpfad: `{example_header_path}`\n\nBisher erfolgreich: `{validation_status}`\n\nLetzter Fehler: `{last_error}`",
         "data": {
           "name": "Name",
           "language": "Sprache",
           "header_path": "Header-Datei",
-          "default_target_media_player": "Standard-Zielplayer"
+          "default_target_media_player": "Standard-Zielplayer",
+          "browser_auth_file_name": "Dateiname fuer Browser-Auth-Import",
+          "browser_auth_input": "Browser-Auth-Import"
         }
       }
     },
@@ -45,12 +49,14 @@
     "step": {
       "init": {
         "title": "YouTube Music Connector Optionen",
-        "description": "Aendere Browser-Auth, Sprache oder den Standard-Zielplayer. Beim Speichern wird die Verbindung immer direkt getestet.\n\nGuide: [Browser Auth Guide]({browser_auth_guide_url})\n\nBeispielpfad: `{example_header_path}`\n\nBisher erfolgreich: `{validation_status}`\n\nLetzter Fehler: `{last_error}`",
+        "description": "Aendere Browser-Auth, Sprache oder den Standard-Zielplayer. Du kannst direkt `Copy as fetch`, rohe Request-Header oder JSON einfuegen; der Flow speichert die Browser-Auth-Datei dann automatisch. Beim Speichern wird die Verbindung immer direkt getestet.\n\nGuide: [Browser Auth Guide]({browser_auth_guide_url})\n\nBeispielpfad: `{example_header_path}`\n\nBisher erfolgreich: `{validation_status}`\n\nLetzter Fehler: `{last_error}`",
         "data": {
           "name": "Name",
           "language": "Sprache",
           "header_path": "Header-Datei",
-          "default_target_media_player": "Standard-Zielplayer"
+          "default_target_media_player": "Standard-Zielplayer",
+          "browser_auth_file_name": "Dateiname fuer Browser-Auth-Import",
+          "browser_auth_input": "Browser-Auth-Import"
         }
       }
     }

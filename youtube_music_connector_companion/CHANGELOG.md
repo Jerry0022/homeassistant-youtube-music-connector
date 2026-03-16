@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.0
+- Add direct browser-auth import to the integration config flow.
+- Allow pasting `Copy as fetch`, raw request headers, or JSON without manually creating a `browser.json` file first.
+- Store imported browser auth automatically in `/config/.storage/` before validation.
+
 ## 0.2.3
 - Stop cloning GitHub at add-on runtime.
 - Install the bundled integration and Lovelace widget directly from the add-on package.

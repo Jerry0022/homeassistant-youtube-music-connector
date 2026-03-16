@@ -21,6 +21,8 @@ SUPPORTED_LANGUAGES = {
 }
 
 CONF_HEADER_PATH = "header_path"
+CONF_BROWSER_AUTH_INPUT = "browser_auth_input"
+CONF_BROWSER_AUTH_FILE_NAME = "browser_auth_file_name"
 CONF_DEFAULT_TARGET_MEDIA_PLAYER = "default_target_media_player"
 
 ATTR_QUERY = "query"
@@ -105,4 +107,4 @@ PANEL_URL_PATH = "youtube-music-connector"
 PANEL_TITLE = "YouTube Music"
 PANEL_ICON = "mdi:youtube-music"
 PANEL_COMPONENT_NAME = "youtube-music-connector-panel"
-PANEL_MODULE_PATH = "/api/youtube_music_connector/static/youtube-music-connector-panel.js?v=0.2.3"
+PANEL_MODULE_PATH = "/api/youtube_music_connector/static/youtube-music-connector-panel.js?v=0.3.0"

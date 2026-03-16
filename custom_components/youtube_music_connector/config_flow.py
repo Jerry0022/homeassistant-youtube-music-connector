@@ -10,12 +10,16 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.components.media_player import DOMAIN as MEDIA_PLAYER_DOMAIN
 from homeassistant.core import callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.selector import selector
 from homeassistant.helpers.storage import STORAGE_DIR
 
+from .auth_import import DEFAULT_IMPORT_FILENAME, parse_browser_auth_input, write_browser_auth_file
 from .const import (
     CONFIG_STEP_RECONFIGURE,
     CONFIG_STEP_USER,
+    CONF_BROWSER_AUTH_FILE_NAME,
+    CONF_BROWSER_AUTH_INPUT,
     CONF_DEFAULT_TARGET_MEDIA_PLAYER,
     CONF_HEADER_PATH,
     CONF_LANGUAGE,
@@ -53,11 +57,11 @@ class YoutubeMusicConnectorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return await self._async_show_setup_form(CONFIG_STEP_USER)
 
         self.data.update(user_input)
-        header_path = self.data.get(CONF_HEADER_PATH, "")
+        header_path = await self._async_prepare_header_path()
         if not header_path:
             self._errors = {"base": ERROR_MISSING_HEADER}
-            self._last_validation_status = "Header file path is empty."
             return await self._async_show_setup_form(CONFIG_STEP_USER)
+        self.data[CONF_HEADER_PATH] = header_path
 
         unique_id = self._build_unique_id(header_path)
         await self.async_set_unique_id(unique_id)
@@ -79,14 +83,16 @@ class YoutubeMusicConnectorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is None:
             self.data = dict(entry.options or entry.data)
+            self.data.setdefault(CONF_BROWSER_AUTH_INPUT, "")
+            self.data.setdefault(CONF_BROWSER_AUTH_FILE_NAME, DEFAULT_IMPORT_FILENAME)
             return await self._async_show_setup_form(CONFIG_STEP_RECONFIGURE)
 
         self.data.update(user_input)
-        header_path = self.data.get(CONF_HEADER_PATH, "")
+        header_path = await self._async_prepare_header_path()
         if not header_path:
             self._errors = {"base": ERROR_MISSING_HEADER}
-            self._last_validation_status = "Header file path is empty."
             return await self._async_show_setup_form(CONFIG_STEP_RECONFIGURE)
+        self.data[CONF_HEADER_PATH] = header_path
 
         if self._is_duplicate_header_path(header_path, exclude_entry_id=entry.entry_id):
             self._errors = {"base": "already_configured"}
@@ -109,6 +115,29 @@ class YoutubeMusicConnectorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @callback
     def async_get_options_flow(config_entry):
         return YoutubeMusicConnectorOptionsFlow(config_entry)
+
+    async def _async_prepare_header_path(self) -> str:
+        raw_input = str(self.data.get(CONF_BROWSER_AUTH_INPUT, "")).strip()
+        if raw_input:
+            file_name = str(self.data.get(CONF_BROWSER_AUTH_FILE_NAME, DEFAULT_IMPORT_FILENAME)).strip()
+            try:
+                headers = parse_browser_auth_input(raw_input)
+                _host_path, config_path = write_browser_auth_file(self.hass, file_name, headers)
+            except HomeAssistantError as err:
+                self._errors = {"base": ERROR_AUTH}
+                self._last_error_detail = str(err)
+                self._last_validation_status = f"Browser auth import failed: {self._last_error_detail}"
+                return ""
+            self._last_error_detail = ""
+            self._last_validation_status = f"Browser auth saved to {config_path}"
+            self.data[CONF_BROWSER_AUTH_FILE_NAME] = Path(config_path).name
+            self.data[CONF_BROWSER_AUTH_INPUT] = ""
+            return config_path
+
+        header_path = str(self.data.get(CONF_HEADER_PATH, "")).strip()
+        if not header_path:
+            self._last_validation_status = "Header file path is empty."
+        return header_path
 
     async def _async_validate_and_store_status(self, data: dict) -> dict | None:
         self._errors = {}
@@ -161,6 +190,18 @@ class YoutubeMusicConnectorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         data_schema[vol.Required(CONF_HEADER_PATH, default=self.data.get(CONF_HEADER_PATH, ""))] = str
         data_schema[
             vol.Optional(
+                CONF_BROWSER_AUTH_FILE_NAME,
+                default=self.data.get(CONF_BROWSER_AUTH_FILE_NAME, DEFAULT_IMPORT_FILENAME),
+            )
+        ] = str
+        data_schema[
+            vol.Optional(
+                CONF_BROWSER_AUTH_INPUT,
+                default=self.data.get(CONF_BROWSER_AUTH_INPUT, ""),
+            )
+        ] = selector({"text": {"multiline": True, "type": "text"}})
+        data_schema[
+            vol.Optional(
                 CONF_DEFAULT_TARGET_MEDIA_PLAYER,
                 default=self.data.get(CONF_DEFAULT_TARGET_MEDIA_PLAYER, ""),
             )
@@ -179,6 +220,8 @@ class YoutubeMusicConnectorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_NAME: DEFAULT_NAME,
             CONF_LANGUAGE: DEFAULT_LANGUAGE,
             CONF_HEADER_PATH: self.hass.config.path(STORAGE_DIR, "browser_youtube_music_connector.json"),
+            CONF_BROWSER_AUTH_FILE_NAME: DEFAULT_IMPORT_FILENAME,
+            CONF_BROWSER_AUTH_INPUT: "",
             CONF_DEFAULT_TARGET_MEDIA_PLAYER: "",
         }
 
@@ -218,6 +261,8 @@ class YoutubeMusicConnectorOptionsFlow(config_entries.OptionsFlow):
     def __init__(self, config_entry) -> None:
         self.config_entry = config_entry
         self.data = dict(config_entry.options or config_entry.data)
+        self.data.setdefault(CONF_BROWSER_AUTH_INPUT, "")
+        self.data.setdefault(CONF_BROWSER_AUTH_FILE_NAME, DEFAULT_IMPORT_FILENAME)
         self._errors: dict[str, str] = {}
         self._last_error_detail = ""
         self._last_validation_status = "No test run yet."
@@ -225,14 +270,14 @@ class YoutubeMusicConnectorOptionsFlow(config_entries.OptionsFlow):
     async def async_step_init(self, user_input=None):
         if user_input is not None:
             self.data.update(user_input)
-            header_path = self.data.get(CONF_HEADER_PATH, "")
+            header_path = await self._async_prepare_header_path()
             if not header_path:
                 self._errors = {"base": ERROR_MISSING_HEADER}
-                self._last_validation_status = "Header file path is empty."
             elif self._is_duplicate_header_path(header_path):
                 self._errors = {"base": "already_configured"}
                 self._last_validation_status = "Validation skipped because this header file is already configured."
             else:
+                self.data[CONF_HEADER_PATH] = header_path
                 validated = await self._async_validate_options()
                 if validated is not None:
                     return self.async_create_entry(data=validated)
@@ -251,6 +296,29 @@ class YoutubeMusicConnectorOptionsFlow(config_entries.OptionsFlow):
             },
         )
 
+    async def _async_prepare_header_path(self) -> str:
+        raw_input = str(self.data.get(CONF_BROWSER_AUTH_INPUT, "")).strip()
+        if raw_input:
+            file_name = str(self.data.get(CONF_BROWSER_AUTH_FILE_NAME, DEFAULT_IMPORT_FILENAME)).strip()
+            try:
+                headers = parse_browser_auth_input(raw_input)
+                _host_path, config_path = write_browser_auth_file(self.hass, file_name, headers)
+            except HomeAssistantError as err:
+                self._errors = {"base": ERROR_AUTH}
+                self._last_error_detail = str(err)
+                self._last_validation_status = f"Browser auth import failed: {self._last_error_detail}"
+                return ""
+            self._last_error_detail = ""
+            self._last_validation_status = f"Browser auth saved to {config_path}"
+            self.data[CONF_BROWSER_AUTH_FILE_NAME] = Path(config_path).name
+            self.data[CONF_BROWSER_AUTH_INPUT] = ""
+            return config_path
+
+        header_path = str(self.data.get(CONF_HEADER_PATH, "")).strip()
+        if not header_path:
+            self._last_validation_status = "Header file path is empty."
+        return header_path
+
     async def _async_validate_options(self) -> dict | None:
         self._errors = {}
         self._last_validation_status = "Validation started."
@@ -268,7 +336,9 @@ class YoutubeMusicConnectorOptionsFlow(config_entries.OptionsFlow):
                 return None
         except Exception as err:
             self._last_error_detail = str(err).strip() or err.__class__.__name__
-            self._last_validation_status = f"{self._last_validation_status} | Validation failed: {self._last_error_detail}"
+            self._last_validation_status = (
+                f"{self._last_validation_status} | Validation failed: {self._last_error_detail}"
+            )
             self._errors["base"] = ERROR_AUTH
             return None
 
@@ -298,6 +368,18 @@ class YoutubeMusicConnectorOptionsFlow(config_entries.OptionsFlow):
             {"select": {"options": languages, "mode": "dropdown"}}
         )
         schema[vol.Required(CONF_HEADER_PATH, default=self.data.get(CONF_HEADER_PATH, ""))] = str
+        schema[
+            vol.Optional(
+                CONF_BROWSER_AUTH_FILE_NAME,
+                default=self.data.get(CONF_BROWSER_AUTH_FILE_NAME, DEFAULT_IMPORT_FILENAME),
+            )
+        ] = str
+        schema[
+            vol.Optional(
+                CONF_BROWSER_AUTH_INPUT,
+                default=self.data.get(CONF_BROWSER_AUTH_INPUT, ""),
+            )
+        ] = selector({"text": {"multiline": True, "type": "text"}})
         schema[
             vol.Optional(
                 CONF_DEFAULT_TARGET_MEDIA_PLAYER,

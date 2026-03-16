@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import filecmp
 import shutil
 from pathlib import Path
 
@@ -30,28 +29,32 @@ def replace_tree(source: Path, target: Path) -> None:
     shutil.copytree(source, target, ignore=ignore_names)
 
 
+def iter_files(base: Path) -> dict[str, bytes]:
+    result: dict[str, bytes] = {}
+    for file_path in sorted(path for path in base.rglob("*") if path.is_file()):
+        if file_path.name == "__pycache__":
+            continue
+        if file_path.suffix in {".pyc", ".pyo", ".bak", ".tmp"}:
+            continue
+        relative = file_path.relative_to(base).as_posix()
+        result[relative] = file_path.read_bytes()
+    return result
+
+
 def compare_dirs(source: Path, target: Path) -> list[str]:
+    source_files = iter_files(source)
+    target_files = iter_files(target)
     differences: list[str] = []
-    comparison = filecmp.dircmp(source, target, ignore=list(ignore_names("", comparison_names(source))))
-    collect_differences(comparison, differences)
+
+    for relative in sorted(source_files.keys() - target_files.keys()):
+        differences.append(f"Missing from payload: {source / relative}")
+    for relative in sorted(target_files.keys() - source_files.keys()):
+        differences.append(f"Unexpected in payload: {target / relative}")
+    for relative in sorted(source_files.keys() & target_files.keys()):
+        if source_files[relative] != target_files[relative]:
+            differences.append(f"Changed file: {source / relative}")
+
     return differences
-
-
-def comparison_names(path: Path) -> list[str]:
-    return [child.name for child in path.iterdir()] if path.exists() else []
-
-
-def collect_differences(comparison: filecmp.dircmp, differences: list[str]) -> None:
-    if comparison.left_only:
-        differences.extend(f"Missing from payload: {comparison.left}/{name}" for name in comparison.left_only)
-    if comparison.right_only:
-        differences.extend(f"Unexpected in payload: {comparison.right}/{name}" for name in comparison.right_only)
-    if comparison.diff_files:
-        differences.extend(f"Changed file: {comparison.left}/{name}" for name in comparison.diff_files)
-    if comparison.funny_files:
-        differences.extend(f"Uncomparable file: {comparison.left}/{name}" for name in comparison.funny_files)
-    for sub in comparison.subdirs.values():
-        collect_differences(sub, differences)
 
 
 def check_synced() -> int:

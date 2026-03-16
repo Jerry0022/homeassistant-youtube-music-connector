@@ -16,5 +16,5 @@
   "requirements": [
     "pytubefix==10.3.8"
   ],
-  "version": "0.2.3"
+  "version": "0.3.0"
 }

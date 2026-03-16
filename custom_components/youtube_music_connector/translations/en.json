@@ -4,22 +4,26 @@
     "step": {
       "user": {
         "title": "YouTube Music Connector",
-        "description": "Use browser auth via a `browser.json` file in the format described by the official documentation. A step-by-step guide is available here: [Browser Auth Guide]({browser_auth_guide_url})\n\nRecommended flow:\n1. Create a `browser.json` file using the linked guide.\n2. Store that file locally in Home Assistant.\n3. Enter the full path below, for example `{example_header_path}`.\n4. Click `Submit`. The flow runs a real song search to verify the connection.\n\nRequired keys in the file include `authorization`, `cookie`, `content-type`, `x-goog-authuser`, and `x-origin`.\n\nValidated so far: `{validation_status}`\n\nLast error: `{last_error}`",
+        "description": "Use browser auth via a `browser.json` file in the format described by the official documentation, or paste `Copy as fetch`, raw request headers, or compatible JSON directly below. A step-by-step guide is available here: [Browser Auth Guide]({browser_auth_guide_url})\n\nRecommended flow:\n1. Open music.youtube.com in your normal browser and sign in.\n2. In DevTools, copy either `Copy as fetch` or the `Request Headers` of an authenticated `youtubei/v1` request.\n3. Paste that content below under `Browser auth import`. The flow saves the browser auth file automatically into `/config/.storage/`.\n4. Alternatively, keep using an existing file path such as `{example_header_path}`.\n5. Click `Submit`. The flow runs a real song search to verify the connection.\n\nRequired keys include `authorization`, `cookie`, `content-type`, `x-goog-authuser`, and `x-origin`.\n\nValidated so far: `{validation_status}`\n\nLast error: `{last_error}`",
         "data": {
           "name": "Name",
           "language": "Language",
           "header_path": "Header file",
-          "default_target_media_player": "Default target player"
+          "default_target_media_player": "Default target player",
+          "browser_auth_file_name": "Browser auth file name",
+          "browser_auth_input": "Browser auth import"
         }
       },
       "reconfigure": {
         "title": "Reconfigure YouTube Music Connector",
-        "description": "Update browser auth, language, or the default target player. This step runs the same connection test as the initial setup.\n\nGuide: [Browser Auth Guide]({browser_auth_guide_url})\n\nExample path: `{example_header_path}`\n\nValidated so far: `{validation_status}`\n\nLast error: `{last_error}`",
+        "description": "Update browser auth, language, or the default target player. You can use an existing file path or paste `Copy as fetch` or raw request headers directly. This step runs the same connection test as the initial setup.\n\nGuide: [Browser Auth Guide]({browser_auth_guide_url})\n\nExample path: `{example_header_path}`\n\nValidated so far: `{validation_status}`\n\nLast error: `{last_error}`",
         "data": {
           "name": "Name",
           "language": "Language",
           "header_path": "Header file",
-          "default_target_media_player": "Default target player"
+          "default_target_media_player": "Default target player",
+          "browser_auth_file_name": "Browser auth file name",
+          "browser_auth_input": "Browser auth import"
         }
       }
     },
@@ -45,12 +49,14 @@
     "step": {
       "init": {
         "title": "YouTube Music Connector Options",
-        "description": "Update browser auth, language, or the default target player. Saving always runs a direct connection test.\n\nGuide: [Browser Auth Guide]({browser_auth_guide_url})\n\nExample path: `{example_header_path}`\n\nValidated so far: `{validation_status}`\n\nLast error: `{last_error}`",
+        "description": "Update browser auth, language, or the default target player. You can paste `Copy as fetch`, raw request headers, or JSON directly; the flow then stores the browser auth file automatically. Saving always runs a direct connection test.\n\nGuide: [Browser Auth Guide]({browser_auth_guide_url})\n\nExample path: `{example_header_path}`\n\nValidated so far: `{validation_status}`\n\nLast error: `{last_error}`",
         "data": {
           "name": "Name",
           "language": "Language",
           "header_path": "Header file",
-          "default_target_media_player": "Default target player"
+          "default_target_media_player": "Default target player",
+          "browser_auth_file_name": "Browser auth file name",
+          "browser_auth_input": "Browser auth import"
         }
       }
     }

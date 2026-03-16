@@ -154,9 +154,6 @@ class YoutubeMusicConnectorManager:
                 continue
             if bool(state.attributes.get("restored")):
                 continue
-            supported = int(state.attributes.get("supported_features", 0))
-            if not supported & MediaPlayerEntityFeature.PLAY_MEDIA:
-                continue
             sources.append(state.entity_id)
         return sorted(set(sources))
 

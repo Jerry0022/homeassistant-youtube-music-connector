@@ -81,12 +81,34 @@ def _parse_json_headers(text: str) -> dict[str, str]:
 
 def _parse_raw_headers(text: str) -> dict[str, str]:
     headers: dict[str, str] = {}
+    pending_key: str | None = None
     for line in text.splitlines():
         raw_line = line.strip()
-        if not raw_line or ":" not in raw_line:
+        if not raw_line:
             continue
-        key, value = raw_line.split(":", 1)
-        headers[key.strip()] = value.strip()
+
+        # Chromium/Edge often copy request headers as alternating key/value lines.
+        if pending_key is not None:
+            headers[pending_key] = raw_line
+            pending_key = None
+            continue
+
+        if raw_line.startswith(":") and raw_line.count(":") == 1:
+            pending_key = raw_line
+            continue
+
+        if ":" in raw_line:
+            key, value = raw_line.split(":", 1)
+            key = key.strip()
+            value = value.strip()
+            if key and value:
+                headers[key] = value
+                continue
+            if key and not value:
+                pending_key = key
+                continue
+
+        pending_key = raw_line
 
     if not headers:
         raise HomeAssistantError("Could not parse any HTTP headers from the provided text.")

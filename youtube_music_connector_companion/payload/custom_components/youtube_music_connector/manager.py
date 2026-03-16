@@ -742,13 +742,29 @@ class YoutubeMusicConnectorManager:
         return resolved.stream_url
 
     async def async_media_pause(self) -> None:
-        if self._target_entity_id:
-            await self.hass.services.async_call(
-                "media_player",
-                "media_pause",
-                {"entity_id": self._target_entity_id},
-                blocking=True,
-            )
+        if not self._target_entity_id:
+            return
+
+        await self.hass.services.async_call(
+            "media_player",
+            "media_pause",
+            {"entity_id": self._target_entity_id},
+            blocking=True,
+        )
+
+        await asyncio.sleep(0.2)
+        target_state = self.target_state
+        if target_state != MediaPlayerState.PLAYING:
+            self.async_notify()
+            return
+
+        await self.hass.services.async_call(
+            "media_player",
+            "media_play_pause",
+            {"entity_id": self._target_entity_id},
+            blocking=True,
+        )
+        self.async_notify()
 
     async def async_media_play(self) -> None:
         if not self._target_entity_id:

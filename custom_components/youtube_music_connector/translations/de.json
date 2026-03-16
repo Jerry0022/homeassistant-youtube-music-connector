@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "YouTube Music Connector",
-        "description": "Nutze Browser-Auth ueber eine `browser.json`-Datei im Format der offiziellen Doku oder fuege unten direkt `Copy as fetch`, rohe Request-Header oder ein passendes JSON ein. Eine Schritt-fuer-Schritt-Anleitung findest du hier: [Browser Auth Guide]({browser_auth_guide_url})\n\nEmpfohlener Ablauf:\n1. Oeffne music.youtube.com in deinem normalen Browser und melde dich an.\n2. Kopiere aus DevTools entweder `Copy as fetch` oder die `Request Headers` eines authentifizierten `youtubei/v1`-Requests.\n3. Fuege den Inhalt unten bei `Browser-Auth-Import` ein. Der Flow speichert die Datei automatisch unter `/config/.storage/`.\n4. Alternativ kannst du weiter einen bestehenden Dateipfad wie `{example_header_path}` eintragen.\n5. Klicke auf `Senden`. Der Flow testet die Verbindung direkt mit einer echten Songs-Suche.\n\nPflichtfelder sind insbesondere `authorization`, `cookie`, `content-type`, `x-goog-authuser` und `x-origin`.\n\nBisher erfolgreich: `{validation_status}`\n\nLetzter Fehler: `{last_error}`",
+        "description": "Nutze Browser-Auth ueber eine `browser.json`-Datei im Format der offiziellen Doku oder fuege unten direkt `Copy as fetch`, rohe Request-Header oder ein passendes JSON ein. Eine Schritt-fuer-Schritt-Anleitung findest du hier: [Browser Auth Guide]({browser_auth_guide_url})\n\nEmpfohlener Ablauf:\n1. Oeffne [music.youtube.com](https://music.youtube.com) in deinem normalen Browser und melde dich an.\n2. Oeffne die Entwicklerwerkzeuge mit `F12` (oder `Ctrl+Shift+I`). Home Assistant kann die DevTools nicht automatisch fuer dich oeffnen.\n3. Wechsle in DevTools auf den Tab `Network` und fuehre in YouTube Music eine Aktion aus, zum Beispiel eine Suche.\n4. Klicke in der Netzwerkliste auf einen Request, dessen URL `youtubei/v1/search` oder `youtubei/v1/browse` enthaelt.\n5. Rechtsklicke auf diesen Request und waehle `Copy` -> `Copy as fetch`. Falls dein Browser diesen Menuepunkt nicht anbietet, kopiere stattdessen die `Request Headers`.\n6. Fuege den Inhalt unten bei `Browser-Auth-Import` ein. Der Flow speichert die Datei automatisch unter `/config/.storage/`.\n7. Alternativ kannst du weiter einen bestehenden Dateipfad wie `{example_header_path}` eintragen.\n8. Klicke auf `Senden`. Der Flow testet die Verbindung direkt mit einer echten Songs-Suche.\n\nPflichtfelder sind insbesondere `authorization`, `cookie`, `content-type`, `x-goog-authuser` und `x-origin`.\n\nBisher erfolgreich: `{validation_status}`\n\nLetzter Fehler: `{last_error}`",
         "data": {
           "name": "Name",
           "language": "Sprache",
@@ -16,7 +16,7 @@
       },
       "reconfigure": {
         "title": "YouTube Music Connector neu konfigurieren",
-        "description": "Passe Browser-Auth, Sprache oder den Standard-Zielplayer an. Du kannst einen bestehenden Dateipfad verwenden oder direkt `Copy as fetch` bzw. rohe Request-Header einfuegen. Der Flow fuehrt denselben Verbindungstest aus wie beim ersten Setup.\n\nGuide: [Browser Auth Guide]({browser_auth_guide_url})\n\nBeispielpfad: `{example_header_path}`\n\nBisher erfolgreich: `{validation_status}`\n\nLetzter Fehler: `{last_error}`",
+        "description": "Passe Browser-Auth, Sprache oder den Standard-Zielplayer an. Du kannst einen bestehenden Dateipfad verwenden oder direkt `Copy as fetch` bzw. rohe Request-Header einfuegen. Oeffne [music.youtube.com](https://music.youtube.com), melde dich an, druecke `F12`, gehe auf `Network`, waehle einen `youtubei/v1/search`- oder `youtubei/v1/browse`-Request und nutze `Copy` -> `Copy as fetch`. Der Flow fuehrt denselben Verbindungstest aus wie beim ersten Setup.\n\nGuide: [Browser Auth Guide]({browser_auth_guide_url})\n\nBeispielpfad: `{example_header_path}`\n\nBisher erfolgreich: `{validation_status}`\n\nLetzter Fehler: `{last_error}`",
         "data": {
           "name": "Name",
           "language": "Sprache",
@@ -49,7 +49,7 @@
     "step": {
       "init": {
         "title": "YouTube Music Connector Optionen",
-        "description": "Aendere Browser-Auth, Sprache oder den Standard-Zielplayer. Du kannst direkt `Copy as fetch`, rohe Request-Header oder JSON einfuegen; der Flow speichert die Browser-Auth-Datei dann automatisch. Beim Speichern wird die Verbindung immer direkt getestet.\n\nGuide: [Browser Auth Guide]({browser_auth_guide_url})\n\nBeispielpfad: `{example_header_path}`\n\nBisher erfolgreich: `{validation_status}`\n\nLetzter Fehler: `{last_error}`",
+        "description": "Aendere Browser-Auth, Sprache oder den Standard-Zielplayer. Du kannst direkt `Copy as fetch`, rohe Request-Header oder JSON einfuegen; der Flow speichert die Browser-Auth-Datei dann automatisch. Oeffne [music.youtube.com](https://music.youtube.com), melde dich an, druecke `F12`, gehe auf `Network`, waehle einen `youtubei/v1/search`- oder `youtubei/v1/browse`-Request und nutze `Copy` -> `Copy as fetch`. Beim Speichern wird die Verbindung immer direkt getestet.\n\nGuide: [Browser Auth Guide]({browser_auth_guide_url})\n\nBeispielpfad: `{example_header_path}`\n\nBisher erfolgreich: `{validation_status}`\n\nLetzter Fehler: `{last_error}`",
         "data": {
           "name": "Name",
           "language": "Sprache",

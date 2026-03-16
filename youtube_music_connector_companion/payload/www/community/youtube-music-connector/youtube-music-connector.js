@@ -36,7 +36,7 @@ class YoutubeMusicConnectorBase extends HTMLElement {
 
   get integrationEntity() {
     const configured = this.config.entity || "media_player.youtube_music_connector";
-    if (this._looksLikeConnectorEntity(configured)) {
+    if (configured && configured !== "media_player.youtube_music_connector" && this._looksLikeConnectorEntity(configured)) {
       return configured;
     }
     return this._discoverConnectorEntity() || configured;
@@ -76,8 +76,47 @@ class YoutubeMusicConnectorBase extends HTMLElement {
     const candidates = Object.keys(this._hass?.states || {})
       .filter((entityId) => entityId.startsWith("media_player."))
       .filter((entityId) => this._looksLikeConnectorEntity(entityId))
-      .sort((left, right) => left.localeCompare(right, "de", { sensitivity: "base" }));
+      .sort((left, right) => {
+        const scoreDelta = this._connectorEntityScore(right) - this._connectorEntityScore(left);
+        if (scoreDelta !== 0) {
+          return scoreDelta;
+        }
+        const updatedDelta = this._entityLastUpdated(right) - this._entityLastUpdated(left);
+        if (updatedDelta !== 0) {
+          return updatedDelta;
+        }
+        return left.localeCompare(right, "de", { sensitivity: "base" });
+      });
     return candidates[0] || "";
+  }
+
+  _entityLastUpdated(entityId) {
+    return Date.parse(this._hass?.states?.[entityId]?.last_updated || "") || 0;
+  }
+
+  _connectorEntityScore(entityId) {
+    const state = this._hass?.states?.[entityId];
+    const attrs = state?.attributes || {};
+    let score = 0;
+    if (attrs.is_youtube_music_connector === true) {
+      score += 1000;
+    }
+    if (entityId === this.config?.entity && entityId !== "media_player.youtube_music_connector") {
+      score += 500;
+    }
+    score += Math.min(100, Number(attrs.search_count || 0));
+    score += Math.min(100, Array.isArray(attrs.search_results) ? attrs.search_results.length : 0);
+    score += Math.min(200, Array.isArray(attrs.available_target_players) ? attrs.available_target_players.length * 10 : 0);
+    if (attrs.target_entity_id) {
+      score += 50;
+    }
+    if (attrs.current_item && Object.keys(attrs.current_item).length > 0) {
+      score += 25;
+    }
+    if (state?.state && state.state !== "unavailable" && state.state !== "unknown") {
+      score += 25;
+    }
+    return score;
   }
 
   getCardSize() {

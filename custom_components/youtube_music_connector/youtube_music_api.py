@@ -87,7 +87,7 @@ class YoutubeMusicApiClient:
         def _fetch() -> dict[str, Any]:
             playlist = client.get_playlist(playlistId=normalized, limit=limit)
             tracks = playlist.get("tracks") or []
-            if tracks:
+            if any(track.get("videoId") for track in tracks):
                 return playlist
 
             if hasattr(client, "get_watch_playlist"):

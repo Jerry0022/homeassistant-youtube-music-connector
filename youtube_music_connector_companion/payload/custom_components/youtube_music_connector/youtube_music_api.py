@@ -2,24 +2,13 @@
 
 from __future__ import annotations
 
-import json
-import re
-import time
 from pathlib import Path
 from typing import Any
 
-from aiohttp import ClientError
-
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from ytmusicapi import YTMusic
 
-from .const import SUPPORTED_LANGUAGES, YTM_API_KEY, YTM_BASE_API, YTM_DOMAIN, YTM_USER_AGENT
-
-FILTER_PARAMS = {
-    "songs": "EgWKAQIIAWoMEA4QChADEAQQCRAF",
-    "artists": "EgWKAQIgAWoMEA4QChADEAQQCRAF",
-    "playlists": "EgWKAQIoAWoMEA4QChADEAQQCRAF",
-}
+from .const import SUPPORTED_LANGUAGES
 
 ALLOWED_BROWSER_HEADERS = {
     "accept",
@@ -55,35 +44,20 @@ class YoutubeMusicApiClient:
         self.hass = hass
         self.language = language if language in SUPPORTED_LANGUAGES else "de"
         self.header_path = Path(header_path)
-        self._session = async_get_clientsession(hass)
-        self._visitor_id: str | None = None
-        self._headers_cache: dict[str, str] | None = None
+        self._ytmusic: YTMusic | None = None
 
     async def async_search(self, query: str, filter_name: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
-        body: dict[str, Any] = {"query": query}
-        if filter_name in FILTER_PARAMS:
-            body["params"] = FILTER_PARAMS[filter_name]
-        payload = await self._post("search", body)
-        items = self._parse_search_response(payload, filter_name, limit)
-        return items[:limit]
+        client = await self.async_get_client()
+        return await self.hass.async_add_executor_job(
+            lambda: client.search(query=query, filter=filter_name, limit=limit)
+        )
 
     async def async_get_playlist(self, playlist_id: str, limit: int = 1) -> dict[str, Any]:
-        browse_id = playlist_id if playlist_id.startswith("VL") else f"VL{playlist_id}"
-        payload = await self._post("browse", {"browseId": browse_id})
-        playlist = {
-            "id": playlist_id,
-            "title": self._first_text_for_key(payload, "title"),
-            "author": self._first_author(payload),
-            "thumbnails": self._first_thumbnail_group(payload),
-            "tracks": [],
-        }
-        for item in self._iter_music_responsive_items(payload):
-            parsed = self._parse_search_item(item, "songs")
-            if parsed and parsed.get("videoId"):
-                playlist["tracks"].append(parsed)
-                if len(playlist["tracks"]) >= limit:
-                    break
-        return playlist
+        client = await self.async_get_client()
+        normalized = playlist_id[2:] if playlist_id.startswith("VL") else playlist_id
+        return await self.hass.async_add_executor_job(
+            lambda: client.get_playlist(playlistId=normalized, limit=limit)
+        )
 
     async def async_get_up_next(
         self,
@@ -91,12 +65,17 @@ class YoutubeMusicApiClient:
         playlist_id: str | None = None,
         limit: int = 10,
     ) -> list[dict[str, Any]]:
-        body: dict[str, Any] = {"videoId": video_id, "isAudioOnly": True}
-        if playlist_id:
-            body["playlistId"] = playlist_id if playlist_id.startswith("VL") else playlist_id
-        payload = await self._post("next", body)
-        items = self._parse_next_response(payload, current_video_id=video_id, limit=limit)
-        return items[:limit]
+        client = await self.async_get_client()
+
+        def _fetch() -> list[dict[str, Any]]:
+            watch = client.get_watch_playlist(
+                videoId=video_id,
+                playlistId=playlist_id,
+                limit=limit,
+            )
+            return watch.get("tracks", [])
+
+        return await self.hass.async_add_executor_job(_fetch)
 
     async def async_validate(self, query: str) -> list[dict[str, Any]]:
         return await self.async_search(query=query, filter_name="songs", limit=1)
@@ -111,61 +90,32 @@ class YoutubeMusicApiClient:
         headers = self._normalize_browser_headers(raw_headers)
         steps.append("Header file loaded.")
 
-        headers = await self._finalize_headers(headers)
         steps.append("Required browser headers verified.")
+        client = await self.async_get_client()
+        steps.append("YTMusic client initialized.")
 
-        payload = await self._post(
-            "search",
-            {"query": query, "params": FILTER_PARAMS["songs"]},
-            headers=headers,
+        results = await self.hass.async_add_executor_job(
+            lambda: client.search(query=query, filter="songs", limit=1)
         )
         steps.append("YouTube Music search request accepted.")
 
-        results = self._parse_search_response(payload, "songs", 1)
         if not results:
-            steps.append("Search request succeeded but returned no parseable song results.")
-            results = [
-                {
-                    "resultType": "validation",
-                    "title": "Validation request accepted",
-                }
-            ]
-            steps.append("Validation accepted despite empty parsed results.")
-            return steps, results
+            steps.append("Search request succeeded but returned no song results.")
+            raise HomeAssistantError("Search test completed but returned no song results.")
 
         steps.append("Search test returned at least one song result.")
         return steps, results
 
-    async def _post(
-        self,
-        endpoint: str,
-        body: dict[str, Any],
-        headers: dict[str, str] | None = None,
-    ) -> dict[str, Any]:
-        headers = headers or await self._build_headers()
-        request_body = {**body, **self._build_context(headers)}
-        url = f"{YTM_BASE_API}{endpoint}?alt=json&key={YTM_API_KEY}"
+    async def async_get_client(self) -> YTMusic:
+        if self._ytmusic is not None:
+            return self._ytmusic
+
+        self._load_browser_header_file()
         try:
-            async with self._session.post(url, json=request_body, headers=headers) as response:
-                payload = await response.json(content_type=None)
-                if response.status >= 400:
-                    error = payload.get("error", {}).get("message", response.reason or "unknown error")
-                    raise HomeAssistantError(
-                        f"Server returned HTTP {response.status}: {response.reason}. {error}"
-                    )
-                return payload
-        except ClientError as err:
-            raise HomeAssistantError(f"YouTube Music request failed: {err}") from err
-
-    async def _build_headers(self) -> dict[str, str]:
-        if self._headers_cache is not None:
-            return dict(self._headers_cache)
-
-        payload = self._load_browser_header_file()
-        headers = self._normalize_browser_headers(payload)
-        headers = await self._finalize_headers(headers)
-        self._headers_cache = headers
-        return dict(headers)
+            self._ytmusic = await self.hass.async_add_executor_job(lambda: YTMusic(str(self.header_path)))
+        except Exception as err:
+            raise HomeAssistantError(f"Could not initialize YTMusic client: {err}") from err
+        return self._ytmusic
 
     def _load_browser_header_file(self) -> dict[str, Any]:
         if not self.header_path.exists():
@@ -194,43 +144,6 @@ class YoutubeMusicApiClient:
             )
 
         return headers
-
-    async def _finalize_headers(self, headers: dict[str, str]) -> dict[str, str]:
-        headers = dict(headers)
-        headers.setdefault("user-agent", YTM_USER_AGENT)
-        headers.setdefault("accept", "*/*")
-        headers.setdefault("content-type", "application/json")
-        headers.setdefault("origin", headers.get("x-origin", YTM_DOMAIN))
-        headers.setdefault("referer", YTM_DOMAIN + "/")
-        headers["x-goog-request-time"] = str(int(time.time()))
-        headers["x-goog-visitor-id"] = headers.get("x-goog-visitor-id") or await self._get_visitor_id()
-        return headers
-
-    def _build_context(self, headers: dict[str, str]) -> dict[str, Any]:
-        return {
-            "context": {
-                "client": {
-                    "clientName": "WEB_REMIX",
-                    "clientVersion": headers.get("x-youtube-client-version", f"1.{time.strftime('%Y%m%d', time.gmtime())}.01.00"),
-                    "hl": self.language,
-                },
-                "user": {},
-            }
-        }
-
-    async def _get_visitor_id(self) -> str:
-        if self._visitor_id:
-            return self._visitor_id
-        async with self._session.get(YTM_DOMAIN, headers={"user-agent": YTM_USER_AGENT, "accept": "*/*"}) as response:
-            text = await response.text()
-        matches = re.findall(r"ytcfg\.set\s*\(\s*({.+?})\s*\)\s*;", text)
-        if not matches:
-            raise HomeAssistantError("Could not retrieve YouTube Music visitor id")
-        ytcfg = json.loads(matches[0])
-        self._visitor_id = ytcfg.get("VISITOR_DATA", "")
-        if not self._visitor_id:
-            raise HomeAssistantError("YouTube Music visitor id is empty")
-        return self._visitor_id
 
     def _parse_search_response(
         self, payload: dict[str, Any], filter_name: str | None, limit: int

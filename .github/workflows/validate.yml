@@ -1,0 +1,39 @@
+name: Validate
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Validate Python syntax
+        run: |
+          python -m py_compile custom_components/youtube_music_connector/__init__.py
+          python -m py_compile custom_components/youtube_music_connector/auth_import.py
+          python -m py_compile custom_components/youtube_music_connector/config_flow.py
+          python -m py_compile custom_components/youtube_music_connector/const.py
+          python -m py_compile custom_components/youtube_music_connector/manager.py
+          python -m py_compile custom_components/youtube_music_connector/media_player.py
+          python -m py_compile custom_components/youtube_music_connector/panel.py
+          python -m py_compile custom_components/youtube_music_connector/youtube_music_api.py
+
+      - name: Validate frontend syntax
+        run: |
+          node --check custom_components/youtube_music_connector/frontend/youtube-music-connector-panel.js
+          node --check www/community/youtube-music-connector/youtube-music-connector.js

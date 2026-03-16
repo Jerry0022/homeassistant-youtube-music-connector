@@ -117,6 +117,7 @@ def _parse_raw_headers(text: str) -> dict[str, str]:
         pending_key = raw_line
 
     headers.update(_extract_required_headers(text, headers))
+    headers.update(_extract_headers_from_flat_text(text, headers))
 
     if not headers:
         raise HomeAssistantError("Could not parse any HTTP headers from the provided text.")
@@ -142,4 +143,36 @@ def _extract_required_headers(text: str, headers: dict[str, str]) -> dict[str, s
         value = (match.group("inline") or match.group("next") or "").strip()
         if value:
             extracted[key] = value
+    return extracted
+
+
+def _extract_headers_from_flat_text(text: str, headers: dict[str, str]) -> dict[str, str]:
+    flat_text = re.sub(r"\s+", " ", text).strip()
+    if not flat_text:
+        return {}
+
+    candidate_names = sorted(
+        ALLOWED_BROWSER_HEADERS | {":authority", ":method", ":path", ":scheme"},
+        key=len,
+        reverse=True,
+    )
+    pattern = re.compile(
+        rf"(?i)(?<!\S)({'|'.join(re.escape(name) for name in candidate_names)})(?=\s)"
+    )
+
+    matches = list(pattern.finditer(flat_text))
+    if not matches:
+        return {}
+
+    extracted: dict[str, str] = {}
+    for index, match in enumerate(matches):
+        key = match.group(1).lower()
+        if headers.get(key):
+            continue
+        value_start = match.end()
+        value_end = matches[index + 1].start() if index + 1 < len(matches) else len(flat_text)
+        value = flat_text[value_start:value_end].strip()
+        if value:
+            extracted[key] = value
+
     return extracted

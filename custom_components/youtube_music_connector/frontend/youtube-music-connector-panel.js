@@ -1797,25 +1797,25 @@ class YoutubeMusicConnectorPanel extends HTMLElement {
                 <div class="main">${this._escape(hasCurrentItem ? (current.title || current.playlist_name || current.artist) : hasUnknownExternalPlayback ? "Playback active" : "Nothing active yet")}</div>
                 <div class="muted">${this._escape(hasCurrentItem ? (current.artist || (current.type ? `${current.type} ready` : "")) : hasUnknownExternalPlayback ? "Audio is already playing on the selected target, but the connector does not know the title." : "Ready for playback")}</div>
                 <div class="muted">Status: ${this._escape(entity?.state || "off")}</div>
-                <div class="now-mode-row">
-                  ${hasCurrentItem ? `
+                ${hasCurrentItem ? `
+                  <div class="now-mode-row">
                     <button class="secondary ${pendingPlayback ? "button-loading" : ""}" id="play_pause_btn" ${pendingPlayback ? "disabled" : ""}>
                       <span class="button-content">
                         ${pendingPlayback ? `<span class="button-spinner"></span>` : `<ha-icon icon="${transportIcon}"></ha-icon>`}
                         <span>${transportLabel}</span>
                       </span>
                     </button>
-                  ` : ""}
-                  <button class="icon-toggle ${autoplayEnabled ? "active" : ""}" id="autoplay_btn" title="${autoplayEnabled ? `Autoplay On (${autoplayQueueLength} queued)` : "Autoplay Off"}">
-                    <ha-icon icon="mdi:playlist-play"></ha-icon>
-                  </button>
-                  <button class="icon-toggle ${shuffleEnabled ? "active" : ""}" id="shuffle_btn" title="${shuffleEnabled ? "Shuffle On" : "Shuffle Off"}">
-                    <ha-icon icon="mdi:shuffle-variant"></ha-icon>
-                  </button>
-                  <button class="icon-toggle ${repeatMode !== "off" ? "active" : ""}" id="repeat_btn" title="${this._repeatTitle(repeatMode)}">
-                    <ha-icon icon="${this._repeatIcon(repeatMode)}"></ha-icon>
-                  </button>
-                </div>
+                    <button class="icon-toggle ${autoplayEnabled ? "active" : ""}" id="autoplay_btn" title="${autoplayEnabled ? `Autoplay On (${autoplayQueueLength} queued)` : "Autoplay Off"}">
+                      <ha-icon icon="mdi:playlist-play"></ha-icon>
+                    </button>
+                    <button class="icon-toggle ${shuffleEnabled ? "active" : ""}" id="shuffle_btn" title="${shuffleEnabled ? "Shuffle On" : "Shuffle Off"}">
+                      <ha-icon icon="mdi:shuffle-variant"></ha-icon>
+                    </button>
+                    <button class="icon-toggle ${repeatMode !== "off" ? "active" : ""}" id="repeat_btn" title="${this._repeatTitle(repeatMode)}">
+                      <ha-icon icon="${this._repeatIcon(repeatMode)}"></ha-icon>
+                    </button>
+                  </div>
+                ` : ""}
                 ${supportsVolume ? `
                   <div class="volume-row">
                     <div class="muted">Volume</div>

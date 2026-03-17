@@ -1803,25 +1803,25 @@ class YoutubeMusicBrowserCard extends YoutubeMusicConnectorBase {
                   <div class="main">${this._escape(title)}</div>
                   <div class="muted">${this._escape(subtitle)}</div>
                   <div class="status-controls">
-                    <div class="status-mode-actions">
-                      ${hasCurrentItem ? `
+                    ${hasCurrentItem ? `
+                      <div class="status-mode-actions">
                         <button class="secondary ${pendingPlayback ? "button-loading" : ""}" id="play_pause_btn" title="${transportLabel}" ${pendingPlayback ? "disabled" : ""}>
                           <span class="button-content">
                             ${pendingPlayback ? `<span class="button-spinner"></span>` : `<ha-icon icon="${transportIcon}"></ha-icon>`}
                             <span>${transportLabel}</span>
                           </span>
                         </button>
-                      ` : ""}
-                      <button class="icon-toggle ${autoplayEnabled ? "active" : ""}" id="autoplay_btn" title="${autoplayEnabled ? `Autoplay On (${autoplayQueueLength} queued)` : "Autoplay Off"}">
-                        <ha-icon icon="mdi:playlist-play"></ha-icon>
-                      </button>
-                      <button class="icon-toggle ${shuffleEnabled ? "active" : ""}" id="shuffle_btn" title="${shuffleEnabled ? "Shuffle On" : "Shuffle Off"}">
-                        <ha-icon icon="mdi:shuffle-variant"></ha-icon>
-                      </button>
-                      <button class="icon-toggle ${repeatMode !== "off" ? "active" : ""}" id="repeat_btn" title="${this._repeatTitle(repeatMode)}">
-                        <ha-icon icon="${this._repeatIcon(repeatMode)}"></ha-icon>
-                      </button>
-                    </div>
+                        <button class="icon-toggle ${autoplayEnabled ? "active" : ""}" id="autoplay_btn" title="${autoplayEnabled ? `Autoplay On (${autoplayQueueLength} queued)` : "Autoplay Off"}">
+                          <ha-icon icon="mdi:playlist-play"></ha-icon>
+                        </button>
+                        <button class="icon-toggle ${shuffleEnabled ? "active" : ""}" id="shuffle_btn" title="${shuffleEnabled ? "Shuffle On" : "Shuffle Off"}">
+                          <ha-icon icon="mdi:shuffle-variant"></ha-icon>
+                        </button>
+                        <button class="icon-toggle ${repeatMode !== "off" ? "active" : ""}" id="repeat_btn" title="${this._repeatTitle(repeatMode)}">
+                          <ha-icon icon="${this._repeatIcon(repeatMode)}"></ha-icon>
+                        </button>
+                      </div>
+                    ` : ""}
                     ${supportsVolume ? `
                       <div class="volume-row">
                         <div class="muted">Volume</div>

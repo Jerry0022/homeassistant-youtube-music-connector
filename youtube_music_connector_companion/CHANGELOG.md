@@ -5,6 +5,9 @@
 - Restart Home Assistant after the add-on run.
 - Hard-reload the browser afterwards so Home Assistant picks up the latest frontend files.
 
+## 0.3.34
+- Only pause the previous target on target switches when the connector itself started the currently playing stream there.
+
 ## 0.3.33
 - Hide autoplay, shuffle, and repeat controls until an actual item is active.
 

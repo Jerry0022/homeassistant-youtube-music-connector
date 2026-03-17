@@ -250,8 +250,7 @@ class YoutubeMusicConnectorManager:
     async def async_set_target(self, entity_id: str) -> None:
         previous_target = self._target_entity_id
         if previous_target and previous_target != entity_id:
-            previous_state = self.hass.states.get(previous_target)
-            if previous_state and previous_state.state == MediaPlayerState.PLAYING:
+            if self._should_pause_previous_target_on_switch(previous_target):
                 await self.hass.services.async_call(
                     "media_player",
                     "media_pause",
@@ -261,6 +260,16 @@ class YoutubeMusicConnectorManager:
         self._target_entity_id = entity_id
         await self._async_rebind_target_listener()
         self.async_notify()
+
+    def _should_pause_previous_target_on_switch(self, previous_target: str) -> bool:
+        if not previous_target or previous_target != self._current_playback_target_entity_id:
+            return False
+        if not self._current_resolved:
+            return False
+        previous_state = self.hass.states.get(previous_target)
+        if not previous_state or previous_state.state != MediaPlayerState.PLAYING:
+            return False
+        return previous_state.attributes.get("media_content_id") == self._current_resolved.proxy_url
 
     async def async_set_entity_id(self, entity_id: str) -> None:
         self._entity_id = entity_id

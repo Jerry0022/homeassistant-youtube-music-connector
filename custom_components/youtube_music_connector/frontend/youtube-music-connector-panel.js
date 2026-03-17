@@ -916,6 +916,18 @@ class YoutubeMusicConnectorPanel extends HTMLElement {
     return normalized.length > 5 ? `${normalized.slice(0, 5)}...` : normalized;
   }
 
+  _asObject(value) {
+    return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  }
+
+  _asArray(value) {
+    return Array.isArray(value) ? value : [];
+  }
+
+  _asString(value) {
+    return value == null ? "" : String(value);
+  }
+
   _activeResultFilters() {
     return Object.entries(this._draft.filters || {})
       .filter(([, enabled]) => !!enabled)
@@ -923,6 +935,7 @@ class YoutubeMusicConnectorPanel extends HTMLElement {
   }
 
   _visibleResults(results) {
+    results = this._asArray(results);
     const activeFilters = this._activeResultFilters();
     if (!activeFilters.length) {
       return results;
@@ -974,26 +987,27 @@ class YoutubeMusicConnectorPanel extends HTMLElement {
 
     const entity = this._entity;
     const attrs = entity?.attributes || {};
-    const results = attrs.search_results || [];
-    const current = attrs.current_item || {};
+    const results = this._asArray(attrs.search_results);
+    const current = this._asObject(attrs.current_item);
     const hasCurrentItem = !!(current.id || current.title || current.playlist_name || current.artist);
-    const targets = attrs.available_target_players || [];
-    const currentTarget = attrs.target_entity_id || "";
+    const targets = this._asArray(attrs.available_target_players);
+    const currentTarget = this._asString(attrs.target_entity_id);
     const activeTarget = this._resolveCurrentTarget(currentTarget);
     const volumePercent = this._effectiveTargetVolumePercent(activeTarget);
     const supportsVolume = this._supportsVolume(activeTarget);
     const autoplayEnabled = !!attrs.autoplay_enabled;
     const autoplayQueueLength = Number(attrs.autoplay_queue_length || 0);
     const shuffleEnabled = !!attrs.shuffle_enabled;
-    const repeatMode = attrs.repeat_mode || "off";
-    const state = entity?.state || "off";
+    const repeatMode = this._asString(attrs.repeat_mode) || "off";
+    const state = this._asString(entity?.state) || "off";
     const hasUnknownExternalPlayback = !hasCurrentItem && state === "playing";
     const pendingPlayback = this._isPendingPlaybackActive();
     const transportLabel = pendingPlayback ? "Starting..." : state === "playing" ? "Pause" : "Play";
     const transportIcon = pendingPlayback ? "" : state === "playing" ? "mdi:pause" : "mdi:play";
     const visibleResults = this._visibleResults(results);
     const limitNumber = Number(this._normalizeLimitValue(this._draft.limit || 5));
-    const canLoadMore = !this._searchLoading && this._draft.query.trim() !== "" && results.length >= limitNumber && limitNumber < 99;
+    const draftQuery = this._asString(this._draft.query);
+    const canLoadMore = !this._searchLoading && draftQuery.trim() !== "" && results.length >= limitNumber && limitNumber < 99;
 
     this.shadowRoot.innerHTML = `
       <style>

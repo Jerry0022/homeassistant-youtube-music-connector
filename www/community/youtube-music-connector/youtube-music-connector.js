@@ -1449,6 +1449,18 @@ class YoutubeMusicConnectorBase extends HTMLElement {
     return normalized.length > 5 ? `${normalized.slice(0, 5)}...` : normalized;
   }
 
+  _asObject(value) {
+    return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  }
+
+  _asArray(value) {
+    return Array.isArray(value) ? value : [];
+  }
+
+  _asString(value) {
+    return value == null ? "" : String(value);
+  }
+
   _activeResultFilters() {
     return Object.entries(this._filterSelection || {})
       .filter(([, enabled]) => !!enabled)
@@ -1456,6 +1468,7 @@ class YoutubeMusicConnectorBase extends HTMLElement {
   }
 
   _visibleResults(results) {
+    results = this._asArray(results);
     const activeFilters = this._activeResultFilters();
     if (!activeFilters.length) {
       return results;
@@ -1591,22 +1604,22 @@ class YoutubeMusicBrowserCard extends YoutubeMusicConnectorBase {
 
     const entity = this.entityState;
     const attrs = entity?.attributes || {};
-    const results = attrs.search_results || [];
-    const currentItem = attrs.current_item || {};
-    const currentTarget = this._resolveCurrentTarget(attrs.target_entity_id || "");
-    const query = this._draftQuery ?? attrs.search_query ?? this.config.default_query ?? "";
+    const results = this._asArray(attrs.search_results);
+    const currentItem = this._asObject(attrs.current_item);
+    const currentTarget = this._resolveCurrentTarget(this._asString(attrs.target_entity_id));
+    const query = this._asString(this._draftQuery ?? attrs.search_query ?? this.config.default_query ?? "");
     const fallbackLimit = attrs.search_count ? Math.max(results.length, Number(this.config.limit || 5)) : Number(this.config.limit || 5);
     const limit = this._draftLimit ?? String(fallbackLimit);
-    const type = attrs.search_type || this.config.search_type || "all";
+    const type = this._asString(attrs.search_type || this.config.search_type || "all");
     const hasCurrentItem = !!(currentItem.id || currentItem.title || currentItem.playlist_name || currentItem.artist);
-    const lastError = attrs.last_error || "";
+    const lastError = this._asString(attrs.last_error);
     const volumePercent = this._effectiveTargetVolumePercent(currentTarget);
     const supportsVolume = this._supportsVolume(currentTarget);
     const autoplayEnabled = !!attrs.autoplay_enabled;
     const autoplayQueueLength = Number(attrs.autoplay_queue_length || 0);
     const shuffleEnabled = !!attrs.shuffle_enabled;
-    const repeatMode = attrs.repeat_mode || "off";
-    const state = entity?.state || "off";
+    const repeatMode = this._asString(attrs.repeat_mode) || "off";
+    const state = this._asString(entity?.state) || "off";
     const hasUnknownExternalPlayback = !hasCurrentItem && state === "playing";
     const title = hasCurrentItem
       ? (currentItem.title || currentItem.playlist_name || currentItem.artist)

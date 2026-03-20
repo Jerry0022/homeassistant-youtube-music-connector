@@ -16,9 +16,13 @@ PAYLOAD_INTEGRATION = PAYLOAD_ROOT / "custom_components" / "youtube_music_connec
 PAYLOAD_WIDGET = PAYLOAD_ROOT / "www" / "community" / "youtube-music-connector"
 
 
+IGNORE_SUFFIXES = {".pyc", ".pyo", ".bak", ".tmp"}
+IGNORE_NAMES = {"__pycache__", "preview.html"}
+
+
 def ignore_names(_directory: str, names: list[str]) -> set[str]:
-    ignored = {name for name in names if name == "__pycache__"}
-    ignored.update(name for name in names if name.endswith((".pyc", ".pyo", ".bak", ".tmp")))
+    ignored = {name for name in names if name in IGNORE_NAMES}
+    ignored.update(name for name in names if any(name.endswith(s) for s in IGNORE_SUFFIXES))
     return ignored
 
 
@@ -32,9 +36,9 @@ def replace_tree(source: Path, target: Path) -> None:
 def iter_files(base: Path) -> dict[str, bytes]:
     result: dict[str, bytes] = {}
     for file_path in sorted(path for path in base.rglob("*") if path.is_file()):
-        if file_path.name == "__pycache__":
+        if file_path.name in IGNORE_NAMES:
             continue
-        if file_path.suffix in {".pyc", ".pyo", ".bak", ".tmp"}:
+        if any(file_path.name.endswith(s) for s in IGNORE_SUFFIXES):
             continue
         relative = file_path.relative_to(base).as_posix()
         result[relative] = file_path.read_bytes()

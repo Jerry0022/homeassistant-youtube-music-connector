@@ -6,6 +6,8 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 
@@ -114,6 +116,10 @@ def main() -> int:
     write_addon_version(next_version)
     write_panel_cache_version(next_version)
     print(f"Bumped versions: {current_version} -> {next_version}")
+
+    sync_script = Path(__file__).resolve().parent / "sync_addon_payload.py"
+    subprocess.check_call([sys.executable, str(sync_script)])
+
     return 0
 
 

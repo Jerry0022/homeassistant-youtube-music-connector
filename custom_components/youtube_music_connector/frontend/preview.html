@@ -319,6 +319,7 @@
       searchResults: [],
       searchQuery: "",
       targetExternal: false, // target plays something NOT from this connector
+      groupTargets: [], // multi-device group playback
     };
 
     const ENTITY_ID = "media_player.youtube_music_connector";
@@ -357,6 +358,7 @@
           search_type: "all",
           search_count: mockState.searchResults.length,
           last_error: "",
+          group_targets: mockState.groupTargets,
         },
       };
 
@@ -448,6 +450,9 @@
           } else if (domain === "youtube_music_connector" && service === "search") {
             mockState.searchResults = SEARCH_RESULTS;
             mockState.searchQuery = data.query;
+            pushHass();
+          } else if (domain === "youtube_music_connector" && service === "set_group_targets") {
+            mockState.groupTargets = data.group_targets || [];
             pushHass();
           } else if (domain === "youtube_music_connector" && service === "play") {
             console.log(`[mock] Playing ${data.item_type} ${data.item_id} on ${data.target_entity_id}`);

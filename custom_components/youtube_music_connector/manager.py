@@ -103,6 +103,7 @@ class YoutubeMusicConnectorManager:
         self._target_listener_unsub: Callable[[], None] | None = None
         self._shuffle_enabled = False
         self._repeat_mode = REPEAT_MODE_OFF
+        self._playback_history: list[ResolvedPlayback] = []
 
     @property
     def name(self) -> str:
@@ -201,6 +202,14 @@ class YoutubeMusicConnectorManager:
         return bool(supported & MediaPlayerEntityFeature.SEEK)
 
     @property
+    def has_next_track(self) -> bool:
+        return bool(self._autoplay_queue) or self._autoplay_enabled
+
+    @property
+    def has_previous_track(self) -> bool:
+        return bool(self._playback_history)
+
+    @property
     def extra_state_attributes(self) -> dict[str, Any]:
         attrs = {
             "search_results": self._last_search_payload.get(ATTR_RESULTS, []),
@@ -216,6 +225,8 @@ class YoutubeMusicConnectorManager:
             "autoplay_queue_length": len(self._autoplay_queue),
             "shuffle_enabled": self._shuffle_enabled,
             "repeat_mode": self._repeat_mode,
+            "has_next_track": self.has_next_track,
+            "has_previous_track": self.has_previous_track,
         }
         if self._current_resolved:
             attrs["resolved_stream"] = {
@@ -311,6 +322,47 @@ class YoutubeMusicConnectorManager:
             )
         self.async_notify()
         return {"repeat_mode": self._repeat_mode}
+
+    async def async_next_track(self) -> dict[str, Any]:
+        """Skip to the next track in the autoplay queue."""
+        if not self._target_entity_id:
+            raise HomeAssistantError("No target media player selected")
+        next_item = await self._async_pop_next_autoplay_track()
+        if not next_item:
+            raise HomeAssistantError("No next track available")
+        video_id = next_item.get("videoId")
+        if not video_id:
+            raise HomeAssistantError("Next track has no video ID")
+        resolved = await self._async_resolve_playback(ITEM_TYPE_SONG, video_id)
+        resolved = ResolvedPlayback(
+            item_type=ITEM_TYPE_SONG,
+            item_id=video_id,
+            playable_id=resolved.playable_id,
+            title=next_item.get("title") or resolved.title,
+            artist=self._extract_artists(next_item) or resolved.artist,
+            image_url=self._extract_thumbnail(next_item) or resolved.image_url,
+            url=f"https://music.youtube.com/watch?v={video_id}",
+            stream_url=resolved.stream_url,
+            proxy_url=self._build_proxy_url(resolved.playable_id, ITEM_TYPE_SONG, video_id),
+        )
+        await self._async_start_resolved_playback(resolved)
+        await self._async_refresh_autoplay_queue(resolved.playable_id)
+        self._last_error = ""
+        self.async_notify()
+        return {"title": resolved.title, "artist": resolved.artist}
+
+    async def async_previous_track(self) -> dict[str, Any]:
+        """Go back to the previous track, or restart the current one."""
+        if not self._target_entity_id:
+            raise HomeAssistantError("No target media player selected")
+        if self._playback_history:
+            previous = self._playback_history.pop()
+            await self._async_start_resolved_playback(previous)
+            self._last_error = ""
+            self.async_notify()
+            return {"title": previous.title, "artist": previous.artist}
+        await self.async_media_seek(0)
+        return {"action": "restarted"}
 
     async def async_execute(self, payload: dict[str, Any]) -> dict[str, Any]:
         target_entity_id = payload.get("target_entity_id", "")
@@ -562,6 +614,14 @@ class YoutubeMusicConnectorManager:
             _LOGGER.exception("Failed to start playback for %s/%s", item_type, item_id)
             raise HomeAssistantError(f"Could not start playback: {err}") from err
 
+    async def async_play_on(self, target_entity_id: str, item_type: str, item_id: str) -> dict[str, Any]:
+        """Play on a specific target without switching the manager's active target."""
+        if not target_entity_id:
+            raise HomeAssistantError("No target media player specified")
+        resolved = await self._async_resolve_playback(item_type, item_id)
+        await self._async_start_resolved_playback_on(resolved, target_entity_id)
+        return {"target_entity_id": target_entity_id, "title": resolved.title}
+
     async def async_stop(self, target_entity_id: str | None = None) -> dict[str, Any]:
         if target_entity_id:
             self._target_entity_id = target_entity_id
@@ -573,6 +633,29 @@ class YoutubeMusicConnectorManager:
         self._last_error = ""
         self.async_notify()
         return {"target_entity_id": self._target_entity_id, "stopped": True}
+
+    async def _async_start_resolved_playback_on(self, resolved: ResolvedPlayback, target_entity_id: str) -> None:
+        """Start playback on a specific target without updating manager state."""
+        media_types = self._playback_media_types_for(resolved.item_type)
+        last_error: Exception | None = None
+        for media_type in media_types:
+            try:
+                await self.hass.services.async_call(
+                    "media_player",
+                    "play_media",
+                    {
+                        "entity_id": target_entity_id,
+                        "media_content_id": resolved.proxy_url,
+                        "media_content_type": media_type,
+                        "enqueue": "replace",
+                    },
+                    blocking=True,
+                )
+                return
+            except Exception as err:
+                last_error = err
+        if last_error is not None:
+            raise last_error
 
     async def _async_start_resolved_playback(self, resolved: ResolvedPlayback) -> None:
         media_types = self._playback_media_types_for(resolved.item_type)
@@ -603,6 +686,10 @@ class YoutubeMusicConnectorManager:
                 )
         if last_error is not None:
             raise last_error
+        if self._current_resolved and self._current_resolved.item_id != resolved.item_id:
+            self._playback_history.append(self._current_resolved)
+            if len(self._playback_history) > 20:
+                self._playback_history = self._playback_history[-20:]
         self._current_resolved = resolved
         self._current_playback_target_entity_id = self._target_entity_id
         self._current_item = {

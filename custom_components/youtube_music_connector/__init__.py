@@ -64,8 +64,17 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     return True
 
 
+RESTART_NOTIFICATION_ID = "youtube_music_connector_restart_required"
+
+
 async def async_setup_entry(hass: HomeAssistant, entry) -> bool:
     _log_runtime_diagnostics()
+    await hass.services.async_call(
+        "persistent_notification",
+        "dismiss",
+        {"notification_id": RESTART_NOTIFICATION_ID},
+        blocking=False,
+    )
     manager = YoutubeMusicConnectorManager(hass, entry)
     domain_data = hass.data.setdefault(DOMAIN, {})
     domain_data[entry.entry_id] = manager

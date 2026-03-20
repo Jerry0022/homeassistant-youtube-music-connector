@@ -101,25 +101,48 @@ send_restart_notification() {
     local title="YouTube Music Connector updated to v${version}"
     local message="The YouTube Music Connector integration has been updated. **Please restart Home Assistant** to activate the new version."
 
+    if [ -z "${SUPERVISOR_TOKEN:-}" ]; then
+        bashio::log.warning "SUPERVISOR_TOKEN is not set — cannot create restart notification"
+        return
+    fi
+
     # Wait for HA Core API to become available (may not be ready during boot)
     local retries=0
+    local http_code=""
     while [ $retries -lt 30 ]; do
-        if curl -s -o /dev/null -w "%{http_code}" \
+        http_code="$(curl -s -o /dev/null -w "%{http_code}" \
             -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
-            "http://supervisor/core/api/" 2>/dev/null | grep -q "200"; then
+            "http://supervisor/core/api/" 2>/dev/null || echo "000")"
+        if [ "$http_code" = "200" ]; then
+            bashio::log.info "HA Core API is available (attempt $((retries + 1)))"
             break
         fi
         retries=$((retries + 1))
+        bashio::log.debug "Waiting for HA Core API (attempt ${retries}/30, last status: ${http_code})"
         sleep 2
     done
 
-    curl -s -o /dev/null -X POST \
+    if [ "$http_code" != "200" ]; then
+        bashio::log.warning "HA Core API not available after 60s (last status: ${http_code}) — skipping notification"
+        return
+    fi
+
+    local response=""
+    local status=""
+    response="$(curl -s -w "\n%{http_code}" -X POST \
         -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
         -H "Content-Type: application/json" \
         "http://supervisor/core/api/services/persistent_notification/create" \
-        -d "{\"notification_id\": \"${notification_id}\", \"title\": \"${title}\", \"message\": \"${message}\"}" \
-        && bashio::log.info "Restart notification created" \
-        || bashio::log.warning "Could not create restart notification (non-critical)"
+        -d "{\"notification_id\": \"${notification_id}\", \"title\": \"${title}\", \"message\": \"${message}\"}" 2>&1)" || true
+    status="$(echo "$response" | tail -n1)"
+    local body=""
+    body="$(echo "$response" | sed '$d')"
+
+    if [ "$status" = "200" ] || [ "$status" = "201" ]; then
+        bashio::log.info "Restart notification created (HTTP ${status})"
+    else
+        bashio::log.warning "Restart notification failed: HTTP ${status} — ${body}"
+    fi
 }
 
 # ── Main ──

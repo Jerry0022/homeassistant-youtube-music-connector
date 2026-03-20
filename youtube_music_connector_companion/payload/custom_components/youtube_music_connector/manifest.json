@@ -17,5 +17,5 @@
     "pytubefix==10.3.8",
     "ytmusicapi==1.11.5"
   ],
-  "version": "0.6.4"
+  "version": "0.6.5"
 }

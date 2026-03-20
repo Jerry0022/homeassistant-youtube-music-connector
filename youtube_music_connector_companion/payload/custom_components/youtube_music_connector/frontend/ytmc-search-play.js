@@ -345,9 +345,13 @@ class YtmcSearchPlay extends HTMLElement {
       /* ── device chips ── */
       .chips-row {
         display: flex;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
         gap: 8px;
       }
+      .chips-row::-webkit-scrollbar { display: none; }
       .chip {
         all: unset;
         cursor: pointer;
@@ -587,7 +591,7 @@ class YtmcSearchPlay extends HTMLElement {
 
       @media (max-width: 480px) {
         .root { padding: 18px 16px; gap: 16px; }
-        .chips-row { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
+        .chips-row { padding-bottom: 4px; }
         .search-bar {
           display: grid;
           grid-template-columns: auto 1fr;

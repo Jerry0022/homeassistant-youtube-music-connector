@@ -11,7 +11,8 @@
           "header_path": "Header-Datei",
           "default_target_media_player": "Standard-Zielplayer",
           "browser_auth_file_name": "Dateiname fuer Browser-Auth-Import",
-          "browser_auth_input": "Browser-Auth-Import"
+          "browser_auth_input": "Browser-Auth-Import",
+          "exclude_devices": "Ausgeschlossene Geraete"
         }
       },
       "reconfigure": {
@@ -23,7 +24,8 @@
           "header_path": "Header-Datei",
           "default_target_media_player": "Standard-Zielplayer",
           "browser_auth_file_name": "Dateiname fuer Browser-Auth-Import",
-          "browser_auth_input": "Browser-Auth-Import"
+          "browser_auth_input": "Browser-Auth-Import",
+          "exclude_devices": "Ausgeschlossene Geraete"
         }
       }
     },
@@ -56,7 +58,8 @@
           "header_path": "Header-Datei",
           "default_target_media_player": "Standard-Zielplayer",
           "browser_auth_file_name": "Dateiname fuer Browser-Auth-Import",
-          "browser_auth_input": "Browser-Auth-Import"
+          "browser_auth_input": "Browser-Auth-Import",
+          "exclude_devices": "Ausgeschlossene Geraete"
         }
       }
     }

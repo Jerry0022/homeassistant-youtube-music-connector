@@ -21,6 +21,7 @@ from .const import (
     CONF_BROWSER_AUTH_FILE_NAME,
     CONF_BROWSER_AUTH_INPUT,
     CONF_DEFAULT_TARGET_MEDIA_PLAYER,
+    CONF_EXCLUDE_DEVICES,
     CONF_HEADER_PATH,
     CONF_LANGUAGE,
     CONF_NAME,
@@ -181,6 +182,7 @@ class YoutubeMusicConnectorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_LANGUAGE: data.get(CONF_LANGUAGE, DEFAULT_LANGUAGE),
             CONF_HEADER_PATH: data[CONF_HEADER_PATH],
             CONF_DEFAULT_TARGET_MEDIA_PLAYER: data.get(CONF_DEFAULT_TARGET_MEDIA_PLAYER, ""),
+            CONF_EXCLUDE_DEVICES: data.get(CONF_EXCLUDE_DEVICES, []),
         }
 
     async def _async_show_setup_form(self, step_id: str):
@@ -219,6 +221,19 @@ class YoutubeMusicConnectorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 "entity": {
                     "filter": [{"domain": MEDIA_PLAYER_DOMAIN}],
                     "multiple": False,
+                }
+            }
+        )
+        data_schema[
+            vol.Optional(
+                CONF_EXCLUDE_DEVICES,
+                default=self.data.get(CONF_EXCLUDE_DEVICES, []),
+            )
+        ] = selector(
+            {
+                "entity": {
+                    "filter": [{"domain": MEDIA_PLAYER_DOMAIN}],
+                    "multiple": True,
                 }
             }
         )
@@ -364,6 +379,7 @@ class YoutubeMusicConnectorOptionsFlow(config_entries.OptionsFlow):
             CONF_LANGUAGE: self.data.get(CONF_LANGUAGE, DEFAULT_LANGUAGE),
             CONF_HEADER_PATH: self.data[CONF_HEADER_PATH],
             CONF_DEFAULT_TARGET_MEDIA_PLAYER: self.data.get(CONF_DEFAULT_TARGET_MEDIA_PLAYER, ""),
+            CONF_EXCLUDE_DEVICES: self.data.get(CONF_EXCLUDE_DEVICES, []),
         }
 
     def _is_duplicate_header_path(self, header_path: str) -> bool:
@@ -399,6 +415,19 @@ class YoutubeMusicConnectorOptionsFlow(config_entries.OptionsFlow):
                 "entity": {
                     "filter": [{"domain": MEDIA_PLAYER_DOMAIN}],
                     "multiple": False,
+                }
+            }
+        )
+        schema[
+            vol.Optional(
+                CONF_EXCLUDE_DEVICES,
+                default=self.data.get(CONF_EXCLUDE_DEVICES, []),
+            )
+        ] = selector(
+            {
+                "entity": {
+                    "filter": [{"domain": MEDIA_PLAYER_DOMAIN}],
+                    "multiple": True,
                 }
             }
         )

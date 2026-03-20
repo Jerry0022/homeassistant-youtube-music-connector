@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from homeassistant.components import panel_custom
+from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.core import HomeAssistant
 
@@ -14,6 +15,12 @@ from .const import (
     PANEL_TITLE,
     PANEL_URL_PATH,
 )
+
+STATIC_BASE = "/api/youtube_music_connector/static"
+LOVELACE_COMPONENTS = [
+    f"{STATIC_BASE}/ytmc-player.js",
+    f"{STATIC_BASE}/ytmc-search-play.js",
+]
 
 
 async def async_register_panel(hass: HomeAssistant) -> None:
@@ -38,6 +45,9 @@ async def async_register_panel(hass: HomeAssistant) -> None:
         require_admin=False,
         config={"domain": DOMAIN},
     )
+
+    for url in LOVELACE_COMPONENTS:
+        add_extra_js_url(hass, url)
 
 
 async def async_unregister_panel(hass: HomeAssistant) -> None:

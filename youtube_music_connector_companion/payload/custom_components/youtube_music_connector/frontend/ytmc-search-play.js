@@ -24,17 +24,21 @@ class YtmcSearchPlay extends HTMLElement {
     this._showAllDevices = false;
     this._searchLoading = false;
     this._interacting = false;
+    this._excludeDevices = [];
   }
 
   /* ── Lovelace card interface ── */
   setConfig(config) {
     this._config = config;
     if (config.entity) this.entityId = config.entity;
+    if (Array.isArray(config.exclude_devices)) this._excludeDevices = config.exclude_devices;
   }
   getCardSize() { return 5; }
 
   set entityId(val) { this._entityId = val; this._tryRender(); }
   get entityId() { return this._entityId; }
+  set excludeDevices(val) { this._excludeDevices = Array.isArray(val) ? val : []; this._tryRender(); }
+  get excludeDevices() { return this._excludeDevices; }
   set hass(hass) { this._hass = hass; if (!this._interacting) this._tryRender(); }
   get hass() { return this._hass; }
 
@@ -169,7 +173,7 @@ class YtmcSearchPlay extends HTMLElement {
     const entity = this._entity;
     if (!entity) { this.shadowRoot.innerHTML = ""; return; }
     const a = this._attrs;
-    const targets = a.available_target_players || [];
+    const targets = (a.available_target_players || []).filter(t => !this._excludeDevices.includes(t));
     const activeTarget = a.target_entity_id || "";
     const results = a.search_results || [];
     const autoplayOn = !!a.autoplay_enabled;

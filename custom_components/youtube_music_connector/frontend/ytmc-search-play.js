@@ -26,6 +26,13 @@ class YtmcSearchPlay extends HTMLElement {
     this._interacting = false;
   }
 
+  /* ── Lovelace card interface ── */
+  setConfig(config) {
+    this._config = config;
+    if (config.entity) this.entityId = config.entity;
+  }
+  getCardSize() { return 5; }
+
   set entityId(val) { this._entityId = val; this._tryRender(); }
   get entityId() { return this._entityId; }
   set hass(hass) { this._hass = hass; if (!this._interacting) this._tryRender(); }
@@ -596,3 +603,10 @@ class YtmcSearchPlay extends HTMLElement {
 }
 
 customElements.define("ytmc-search-play", YtmcSearchPlay);
+
+window.customCards = window.customCards || [];
+window.customCards.push({
+  type: "ytmc-search-play",
+  name: "YouTube Music Search & Play",
+  description: "Search YouTube Music and play results on selected devices.",
+});

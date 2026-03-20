@@ -126,9 +126,9 @@ set_repeat_mode:
       selector:
         select:
           options:
-            - off
-            - once
-            - forever
+            - "off"
+            - "once"
+            - "forever"
 
 play_on:
   description: "Play a YouTube Music item on a specific target without switching the connector's active target. Useful for multi-device playback."
@@ -266,9 +266,9 @@ execute:
       selector:
         select:
           options:
-            - off
-            - once
-            - forever
+            - "off"
+            - "once"
+            - "forever"
     volume_percent:
       required: false
       selector:

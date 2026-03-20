@@ -4,14 +4,18 @@ Two standalone Web Components for embedding YouTube Music Connector controls in 
 
 Both components are **Shadow DOM** isolated, **themeable via CSS custom properties**, and require only two properties: `hass` and `entityId`.
 
+## Resource Registration
+
+Both components are **automatically registered as Lovelace resources** when the integration loads. No manual resource configuration needed — just use the elements in any dashboard.
+
+The scripts are served from:
+- `/api/youtube_music_connector/static/ytmc-player.js`
+- `/api/youtube_music_connector/static/ytmc-search-play.js`
+
 ## Quick Start
 
 ```html
-<!-- Load the component scripts -->
-<script src="/local/community/youtube-music-connector/ytmc-player.js"></script>
-<script src="/local/community/youtube-music-connector/ytmc-search-play.js"></script>
-
-<!-- Use them -->
+<!-- Both elements are globally available after integration setup -->
 <ytmc-player></ytmc-player>
 <ytmc-search-play></ytmc-search-play>
 ```

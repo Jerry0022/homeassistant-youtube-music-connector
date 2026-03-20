@@ -106,11 +106,23 @@ send_restart_notification() {
         return
     fi
 
-    # Wait for HA Core to become available via Supervisor API
+    bashio::log.info "SUPERVISOR_TOKEN length: ${#SUPERVISOR_TOKEN}"
+
+    # Debug: probe Supervisor API connectivity
+    local probe=""
+    probe="$(curl -sSL -w "\n%{http_code}" \
+        -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
+        "http://supervisor/core/info" 2>&1)" || true
+    bashio::log.info "Supervisor /core/info probe: $(echo "$probe" | tail -c 500)"
+
+    # Wait for HA Core to report started/running via bashio
     local retries=0
     local core_state=""
     while [ $retries -lt 30 ]; do
-        core_state="$(curl -sSL -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
+        # Try bashio first (handles auth internally), fall back to curl
+        core_state="$(bashio::core.info state 2>/dev/null)" || \
+        core_state="$(curl -sSL \
+            -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
             "http://supervisor/core/info" 2>/dev/null \
             | sed -n 's/.*"state":[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)" || true
         if [ "$core_state" = "started" ] || [ "$core_state" = "running" ]; then
@@ -127,39 +139,64 @@ send_restart_notification() {
         return
     fi
 
-    # Additional wait for Core API to accept requests after state=started
+    # Grace period for Core API to accept requests
     sleep 5
 
+    # Attempt 1: bashio API call (auth handled internally)
     local response=""
     local status=""
+    local body=""
+    local payload="{\"notification_id\": \"${notification_id}\", \"title\": \"${title}\", \"message\": \"${message}\"}"
+
+    bashio::log.info "Sending notification via bashio API..."
+    if bashio::api.supervisor POST /core/api/services/persistent_notification/create "$payload" 2>/dev/null; then
+        bashio::log.info "Restart notification created via bashio API"
+        return
+    fi
+    bashio::log.warning "bashio API call failed, trying curl..."
+
+    # Attempt 2: curl with Authorization: Bearer
     response="$(curl -sSL -w "\n%{http_code}" -X POST \
         -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
         -H "Content-Type: application/json" \
         "http://supervisor/core/api/services/persistent_notification/create" \
-        -d "{\"notification_id\": \"${notification_id}\", \"title\": \"${title}\", \"message\": \"${message}\"}" 2>&1)" || true
+        -d "$payload" 2>&1)" || true
     status="$(echo "$response" | tail -n1)"
-    local body=""
     body="$(echo "$response" | sed '$d')"
 
     if [ "$status" = "200" ] || [ "$status" = "201" ]; then
         bashio::log.info "Restart notification created (HTTP ${status})"
-    else
-        bashio::log.warning "Restart notification failed: HTTP ${status} — ${body}"
-        # Fallback: try with X-Supervisor-Token header
-        bashio::log.info "Retrying with X-Supervisor-Token header..."
-        response="$(curl -sSL -w "\n%{http_code}" -X POST \
-            -H "X-Supervisor-Token: ${SUPERVISOR_TOKEN}" \
-            -H "Content-Type: application/json" \
-            "http://supervisor/core/api/services/persistent_notification/create" \
-            -d "{\"notification_id\": \"${notification_id}\", \"title\": \"${title}\", \"message\": \"${message}\"}" 2>&1)" || true
-        status="$(echo "$response" | tail -n1)"
-        body="$(echo "$response" | sed '$d')"
-        if [ "$status" = "200" ] || [ "$status" = "201" ]; then
-            bashio::log.info "Restart notification created with fallback header (HTTP ${status})"
-        else
-            bashio::log.warning "Restart notification fallback also failed: HTTP ${status} — ${body}"
-        fi
+        return
     fi
+    bashio::log.warning "Bearer auth failed: HTTP ${status} — ${body}"
+
+    # Attempt 3: curl with X-Supervisor-Token
+    response="$(curl -sSL -w "\n%{http_code}" -X POST \
+        -H "X-Supervisor-Token: ${SUPERVISOR_TOKEN}" \
+        -H "Content-Type: application/json" \
+        "http://supervisor/core/api/services/persistent_notification/create" \
+        -d "$payload" 2>&1)" || true
+    status="$(echo "$response" | tail -n1)"
+    body="$(echo "$response" | sed '$d')"
+
+    if [ "$status" = "200" ] || [ "$status" = "201" ]; then
+        bashio::log.info "Restart notification created with X-Supervisor-Token (HTTP ${status})"
+        return
+    fi
+    bashio::log.warning "X-Supervisor-Token auth also failed: HTTP ${status} — ${body}"
+
+    # Attempt 4: write notification file for integration to pick up on next restart
+    bashio::log.warning "All API attempts failed — writing restart marker file"
+    cat > "/config/.storage/youtube_music_connector_restart_needed.json" <<NOTIF
+{
+  "version": "${version}",
+  "timestamp_utc": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+  "title": "${title}",
+  "message": "${message}",
+  "notification_id": "${notification_id}"
+}
+NOTIF
+    bashio::log.info "Restart marker written to /config/.storage/youtube_music_connector_restart_needed.json"
 }
 
 # ── Main ──

@@ -30,6 +30,13 @@ class YtmcPlayer extends HTMLElement {
     this._showAllDevices = false;
   }
 
+  /* ── Lovelace card interface ── */
+  setConfig(config) {
+    this._config = config;
+    if (config.entity) this.entityId = config.entity;
+  }
+  getCardSize() { return 4; }
+
   set entityId(val) { this._entityId = val; this._tryRender(); }
   get entityId() { return this._entityId; }
   set hass(hass) { this._hass = hass; this._syncProgressTicker(); this._tryRender(); }
@@ -555,3 +562,10 @@ class YtmcPlayer extends HTMLElement {
 }
 
 customElements.define("ytmc-player", YtmcPlayer);
+
+window.customCards = window.customCards || [];
+window.customCards.push({
+  type: "ytmc-player",
+  name: "YouTube Music Player",
+  description: "Now-playing bar with transport controls, volume, and progress/seek.",
+});

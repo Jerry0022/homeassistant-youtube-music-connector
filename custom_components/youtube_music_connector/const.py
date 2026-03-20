@@ -24,6 +24,7 @@ CONF_HEADER_PATH = "header_path"
 CONF_BROWSER_AUTH_INPUT = "browser_auth_input"
 CONF_BROWSER_AUTH_FILE_NAME = "browser_auth_file_name"
 CONF_DEFAULT_TARGET_MEDIA_PLAYER = "default_target_media_player"
+CONF_EXCLUDE_DEVICES = "exclude_devices"
 
 ATTR_QUERY = "query"
 ATTR_SEARCH_TYPE = "search_type"

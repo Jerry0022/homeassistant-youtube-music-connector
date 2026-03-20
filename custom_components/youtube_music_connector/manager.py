@@ -29,6 +29,7 @@ from .const import (
     ATTR_RESULTS,
     ATTR_SEARCH_TYPE,
     CONF_DEFAULT_TARGET_MEDIA_PLAYER,
+    CONF_EXCLUDE_DEVICES,
     CONF_HEADER_PATH,
     CONF_LANGUAGE,
     CONF_NAME,
@@ -104,6 +105,9 @@ class YoutubeMusicConnectorManager:
         self._repeat_mode = REPEAT_MODE_OFF
         self._playback_history: list[ResolvedPlayback] = []
         self._group_targets: list[str] = []
+        self._exclude_devices: set[str] = set(
+            entry.options.get(CONF_EXCLUDE_DEVICES, entry.data.get(CONF_EXCLUDE_DEVICES, []))
+        )
 
     @property
     def name(self) -> str:
@@ -160,6 +164,8 @@ class YoutubeMusicConnectorManager:
             if state.state in {STATE_UNAVAILABLE, STATE_UNKNOWN}:
                 continue
             if bool(state.attributes.get("restored")):
+                continue
+            if state.entity_id in self._exclude_devices:
                 continue
             sources.append(state.entity_id)
         return sorted(set(sources))
@@ -272,6 +278,8 @@ class YoutubeMusicConnectorManager:
             raise
 
     async def async_set_target(self, entity_id: str) -> None:
+        if entity_id in self._exclude_devices:
+            raise HomeAssistantError(f"Device {entity_id} is excluded from playback")
         previous_target = self._target_entity_id
         if previous_target and previous_target != entity_id:
             if self._should_pause_previous_target_on_switch(previous_target):
@@ -288,7 +296,7 @@ class YoutubeMusicConnectorManager:
         self.async_notify()
 
     async def async_set_group_targets(self, targets: list[str]) -> dict[str, Any]:
-        self._group_targets = [t for t in targets if t != self._target_entity_id]
+        self._group_targets = [t for t in targets if t != self._target_entity_id and t not in self._exclude_devices]
         self.async_notify()
         return {"group_targets": list(self._group_targets)}
 

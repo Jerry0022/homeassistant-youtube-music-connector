@@ -762,7 +762,7 @@ class YoutubeMusicConnectorManager:
     def _playback_media_types_for(self, item_type: str) -> list[str]:
         primary = str(MEDIA_TYPE_MAP.get(item_type, "music"))
         target_preferences = self._target_playback_media_type_preferences()
-        ordered = [*target_preferences, primary, "music", "video"]
+        ordered = [*target_preferences, primary, "music", "audio/mpeg", "audio", "video", "url"]
         seen: set[str] = set()
         return [media_type for media_type in ordered if not (media_type in seen or seen.add(media_type))]
 

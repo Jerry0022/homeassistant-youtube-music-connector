@@ -33,6 +33,8 @@ class YtmcPlayer extends HTMLElement {
   }
 
   /* ── Lovelace card interface ── */
+  static getConfigElement() { return document.createElement("ytmc-player-editor"); }
+  static getStubConfig() { return { entity: "media_player.youtube_music_connector" }; }
   setConfig(config) {
     this._config = config;
     if (config.entity) this.entityId = config.entity;
@@ -627,9 +629,58 @@ class YtmcPlayer extends HTMLElement {
 
 customElements.define("ytmc-player", YtmcPlayer);
 
+/* ── Card editor for HA UI ── */
+class YtmcPlayerEditor extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._config = {};
+  }
+  setConfig(config) { this._config = config; this._render(); }
+  set hass(hass) { this._hass = hass; }
+
+  _render() {
+    const entity = this._config.entity || "";
+    const exclude = (this._config.exclude_devices || []).join(", ");
+    this.shadowRoot.innerHTML = `
+      <style>
+        .editor { display: grid; gap: 12px; padding: 8px 0; }
+        label { font-size: 0.85rem; font-weight: 500; display: grid; gap: 4px; }
+        input { padding: 8px; border: 1px solid var(--divider-color, #ccc); border-radius: 6px; font-size: 0.9rem; background: var(--card-background-color, #fff); color: var(--primary-text-color, #000); }
+        .hint { font-size: 0.75rem; color: var(--secondary-text-color, #666); }
+      </style>
+      <div class="editor">
+        <label>
+          Entity
+          <input type="text" id="entity" value="${entity}" placeholder="media_player.youtube_music_connector" />
+        </label>
+        <label>
+          Exclude devices (comma-separated entity IDs)
+          <input type="text" id="exclude" value="${exclude}" placeholder="media_player.kitchen, media_player.office" />
+          <span class="hint">Hide these devices from the device selector</span>
+        </label>
+      </div>
+    `;
+    this.shadowRoot.getElementById("entity").addEventListener("change", (e) => {
+      this._config = { ...this._config, entity: e.target.value.trim() };
+      this._dispatch();
+    });
+    this.shadowRoot.getElementById("exclude").addEventListener("change", (e) => {
+      const val = e.target.value.trim();
+      this._config = { ...this._config, exclude_devices: val ? val.split(",").map(s => s.trim()).filter(Boolean) : [] };
+      this._dispatch();
+    });
+  }
+  _dispatch() {
+    this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config } }));
+  }
+}
+customElements.define("ytmc-player-editor", YtmcPlayerEditor);
+
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: "ytmc-player",
   name: "YouTube Music Player",
-  description: "Now-playing bar with transport controls, volume, and progress/seek.",
+  description: "Now-playing card with album art, transport controls, volume, progress/seek, and multi-device group playback.",
+  documentationURL: "https://github.com/Jerry0022/homeassistant-youtube-music-connector/blob/main/docs/components.md",
 });

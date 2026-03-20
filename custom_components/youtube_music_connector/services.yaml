@@ -130,6 +130,50 @@ set_repeat_mode:
             - once
             - forever
 
+play_on:
+  description: "Play a YouTube Music item on a specific target without switching the connector's active target. Useful for multi-device playback."
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          domain: media_player
+    target_entity_id:
+      required: true
+      selector:
+        entity:
+          domain: media_player
+    item_type:
+      required: true
+      selector:
+        select:
+          options:
+            - song
+            - artist
+            - playlist
+    item_id:
+      required: true
+      selector:
+        text:
+
+next_track:
+  description: "Skip to the next track in the autoplay queue."
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          domain: media_player
+
+previous_track:
+  description: "Go back to the previous track, or restart the current one if no history is available."
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          domain: media_player
+
 execute:
   description: "Unified programmatic entrypoint for scripts and automations. Supports text search, direct YouTube Music IDs, or a full YouTube Music URL, plus target player and playback modes in one call."
   fields:

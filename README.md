@@ -1,5 +1,7 @@
 # Home Assistant YouTube Music Connector
 
+**Version: 0.4.0**
+
 Custom Home Assistant integration for browsing YouTube Music, playing results on compatible media players, and controlling playback from a sidebar app and Lovelace widget.
 
 ## Features

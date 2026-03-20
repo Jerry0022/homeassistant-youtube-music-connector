@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YTMC Component Preview</title>
+  <style>
+    /* ── ha-icon polyfill ── */
+    ha-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: var(--mdc-icon-size, 24px);
+      height: var(--mdc-icon-size, 24px);
+    }
+
+    /* ── page chrome ── */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0a0e14;
+      color: #e2e8f0;
+      min-height: 100vh;
+    }
+    .page {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 24px 16px 80px;
+      display: grid;
+      gap: 28px;
+    }
+    h1 {
+      font-size: 1.3rem;
+      font-weight: 800;
+      color: #f8fafc;
+      letter-spacing: -0.02em;
+    }
+    h2 {
+      font-size: 0.85rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #94a3b8;
+      margin-bottom: 4px;
+    }
+
+    /* ── control panel ── */
+    .controls {
+      background: #1e293b;
+      border-radius: 16px;
+      padding: 20px;
+      display: grid;
+      gap: 16px;
+    }
+    .controls-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 12px;
+    }
+    .ctrl-group {
+      display: grid;
+      gap: 4px;
+    }
+    .ctrl-group label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #64748b;
+    }
+    .ctrl-group select, .ctrl-group input[type="range"] {
+      width: 100%;
+      padding: 6px 10px;
+      border-radius: 8px;
+      border: 1px solid #334155;
+      background: #0f172a;
+      color: #e2e8f0;
+      font-size: 0.85rem;
+      font-family: inherit;
+    }
+    .ctrl-group input[type="range"] {
+      padding: 4px 0;
+      accent-color: #4a9eff;
+    }
+    .ctrl-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .ctrl-btn {
+      padding: 6px 14px;
+      border-radius: 8px;
+      border: 1px solid #334155;
+      background: #0f172a;
+      color: #e2e8f0;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.12s;
+    }
+    .ctrl-btn:hover { background: #1e293b; border-color: #4a9eff; }
+    .ctrl-btn.active { background: #4a9eff; color: #fff; border-color: #4a9eff; }
+    .ctrl-val {
+      font-size: 0.78rem;
+      color: #94a3b8;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ── theme override section ── */
+    .theme-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 10px;
+    }
+    .theme-row label {
+      font-size: 0.7rem; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .theme-row input[type="color"] {
+      width: 100%; height: 32px; border: none; border-radius: 6px; cursor: pointer; background: transparent;
+    }
+
+    /* ── component slots ── */
+    .slot {
+      display: grid;
+      gap: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <h1>YTMC Component Preview</h1>
+
+    <!-- Controls -->
+    <div class="controls">
+      <h2>State Controls</h2>
+      <div class="controls-grid">
+        <div class="ctrl-group">
+          <label>Player State</label>
+          <select id="ctrl-state">
+            <option value="off">Off</option>
+            <option value="idle">Idle</option>
+            <option value="playing" selected>Playing</option>
+            <option value="paused">Paused</option>
+          </select>
+        </div>
+        <div class="ctrl-group">
+          <label>Track</label>
+          <select id="ctrl-track">
+            <option value="0">Natur pur: exotischer Dschungel</option>
+            <option value="1">Ja, Schatz!</option>
+            <option value="2">Liebeslied (Mathematisch korrekt)</option>
+            <option value="none">No track</option>
+          </select>
+        </div>
+        <div class="ctrl-group">
+          <label>Target Device</label>
+          <select id="ctrl-target">
+            <option value="media_player.gastebad_nest">Gästebad Nest</option>
+            <option value="media_player.wohnzimmer_nest">Wohnzimmer Nest</option>
+            <option value="media_player.schlafzimmer_nest">Schlafzimmer Nest</option>
+            <option value="media_player.chromecast_tv">Chromecast TV</option>
+          </select>
+        </div>
+        <div class="ctrl-group">
+          <label>Volume <span class="ctrl-val" id="vol-val">65%</span></label>
+          <input type="range" id="ctrl-volume" min="0" max="100" value="65" />
+        </div>
+        <div class="ctrl-group">
+          <label>Position <span class="ctrl-val" id="pos-val">2:14 / 6:28</span></label>
+          <input type="range" id="ctrl-position" min="0" max="388" value="134" />
+        </div>
+      </div>
+      <div class="ctrl-row">
+        <button class="ctrl-btn" id="ctrl-shuffle">Shuffle</button>
+        <button class="ctrl-btn" id="ctrl-autoplay">Autoplay</button>
+        <button class="ctrl-btn" id="ctrl-repeat">Repeat: off</button>
+        <button class="ctrl-btn" id="ctrl-has-prev">Has Previous</button>
+        <button class="ctrl-btn active" id="ctrl-has-next">Has Next</button>
+        <button class="ctrl-btn" id="ctrl-search-results">Load Search Results</button>
+        <button class="ctrl-btn" id="ctrl-target-external">Target Plays Externally</button>
+      </div>
+
+      <h2>Scenario Presets</h2>
+      <div class="ctrl-row">
+        <button class="ctrl-btn" id="preset-fresh" title="First open — nothing happened yet">Fresh Start</button>
+        <button class="ctrl-btn" id="preset-playing" title="Connector is playing a track">Playing via Connector</button>
+        <button class="ctrl-btn" id="preset-paused" title="Connector paused a track">Paused</button>
+        <button class="ctrl-btn" id="preset-external" title="Target plays something else, connector idle">External Playback</button>
+        <button class="ctrl-btn" id="preset-searched" title="User searched but hasn't played yet">Searched, Not Playing</button>
+        <button class="ctrl-btn" id="preset-full" title="Everything active: playing, searched, history">Full State</button>
+      </div>
+
+      <h2>Theme Overrides</h2>
+      <div class="theme-row">
+        <div class="ctrl-group">
+          <label>--ytmc-bg</label>
+          <input type="color" id="theme-bg" value="#0f1923" />
+        </div>
+        <div class="ctrl-group">
+          <label>--ytmc-accent</label>
+          <input type="color" id="theme-accent" value="#4a9eff" />
+        </div>
+        <div class="ctrl-group">
+          <label>--ytmc-text</label>
+          <input type="color" id="theme-text" value="#f8fafc" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Player component -->
+    <div class="slot">
+      <h2>ytmc-player</h2>
+      <ytmc-player id="the-player"></ytmc-player>
+    </div>
+
+    <!-- Search component -->
+    <div class="slot">
+      <h2>ytmc-search-play</h2>
+      <ytmc-search-play id="the-search"></ytmc-search-play>
+    </div>
+  </div>
+
+  <script>
+    /* ── ha-icon polyfill using MDI SVGs ── */
+    const MDI_ICONS = {
+      "mdi:play": "M8,5.14V19.14L19,12.14L8,5.14Z",
+      "mdi:pause": "M14,19H18V5H14M6,19H10V5H6V19Z",
+      "mdi:skip-next": "M16,18H18V6H16M6,18L14.5,12L6,6V18Z",
+      "mdi:skip-previous": "M6,18V6H8V18H6M9.5,12L18,6V18L9.5,12Z",
+      "mdi:shuffle-variant": "M14.83,13.41L13.42,14.82L16.55,17.95L14.5,20H20V14.5L17.96,16.54L14.83,13.41M14.5,4L16.54,6.04L4,18.59L5.41,20L17.96,7.46L20,9.5V4M10.59,9.17L5.41,4L4,5.41L9.17,10.58L10.59,9.17Z",
+      "mdi:repeat": "M17,17H7V14L3,18L7,22V19H19V13H17M7,7H17V10L21,6L17,2V5H5V11H7V7Z",
+      "mdi:repeat-once": "M13,15V9H12L10,10V11H11.5V15M17,17H7V14L3,18L7,22V19H19V13H17M7,7H17V10L21,6L17,2V5H5V11H7V7Z",
+      "mdi:volume-high": "M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.84 14,18.7V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23M16.5,12C16.5,10.23 15.5,8.71 14,7.97V16C15.5,15.29 16.5,13.76 16.5,12M3,9V15H7L12,20V4L7,9H3Z",
+      "mdi:volume-medium": "M5,9V15H9L14,20V4L9,9M18.5,12C18.5,10.23 17.5,8.71 16,7.97V16C17.5,15.29 18.5,13.76 18.5,12Z",
+      "mdi:volume-off": "M12,4L9.91,6.09L12,8.18M4.27,3L3,4.27L7.73,9H3V15H7L12,20V13.27L16.25,17.53C15.58,18.04 14.83,18.46 14,18.7V20.77C15.38,20.45 16.63,19.82 17.68,18.96L19.73,21L21,19.73L12,10.73M19,12C19,12.94 18.8,13.82 18.46,14.64L19.97,16.15C20.62,14.91 21,13.5 21,12C21,7.72 18,4.14 14,3.23V5.29C16.89,6.15 19,8.83 19,12M16.5,12C16.5,10.23 15.5,8.71 14,7.97V10.18L16.45,12.63C16.5,12.43 16.5,12.21 16.5,12Z",
+      "mdi:music-note": "M12,3V13.55C11.41,13.21 10.73,13 10,13A4,4 0 0,0 6,17A4,4 0 0,0 10,21A4,4 0 0,0 14,17V7H18V3H12Z",
+      "mdi:magnify": "M9.5,3A6.5,6.5 0 0,1 16,9.5C16,11.11 15.41,12.59 14.44,13.73L14.71,14H15.5L20.5,19L19,20.5L14,15.5V14.71L13.73,14.44C12.59,15.41 11.11,16 9.5,16A6.5,6.5 0 0,1 3,9.5A6.5,6.5 0 0,1 9.5,3M9.5,5C7,5 5,7 5,9.5C5,12 7,14 9.5,14C12,14 14,12 14,9.5C14,7 12,5 9.5,5Z",
+      "mdi:speaker": "M12,12A3,3 0 0,1 9,9A3,3 0 0,1 12,6A3,3 0 0,1 15,9A3,3 0 0,1 12,12M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4Z",
+      "mdi:television": "M21,17H3V5H21M21,3H3A2,2 0 0,0 1,5V17A2,2 0 0,0 3,19H8V21H16V19H21A2,2 0 0,0 23,17V5A2,2 0 0,0 21,3Z",
+      "mdi:playlist-play": "M15,6H3V8H15V6M15,10H3V12H15V10M3,16H11V14H3V16M17,6V14.18C16.69,14.07 16.35,14 16,14A3,3 0 0,0 13,17A3,3 0 0,0 16,20A3,3 0 0,0 19,17V8H22V6H17Z",
+      "mdi:arrow-right": "M4,11V13H16L10.5,18.5L11.92,19.92L19.84,12L11.92,4.08L10.5,5.5L16,11H4Z",
+      "mdi:loading": "M12,4V2A10,10 0 0,0 2,12H4A8,8 0 0,1 12,4Z",
+      "mdi:youtube-music": "M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4M10,8.5V15.5L16,12",
+    };
+
+    class HaIcon extends HTMLElement {
+      static get observedAttributes() { return ["icon"]; }
+      constructor() {
+        super();
+        this.attachShadow({ mode: "open" });
+      }
+      connectedCallback() { this._render(); }
+      attributeChangedCallback() { this._render(); }
+      _render() {
+        const icon = this.getAttribute("icon") || "";
+        const path = MDI_ICONS[icon];
+        const size = getComputedStyle(this).getPropertyValue("--mdc-icon-size").trim() || "24px";
+        if (!path) {
+          this.shadowRoot.innerHTML = `<span style="font-size:10px;opacity:0.5">${icon.replace("mdi:", "")}</span>`;
+          return;
+        }
+        this.shadowRoot.innerHTML = `
+          <svg viewBox="0 0 24 24" width="${size}" height="${size}" style="fill:currentColor;display:block">
+            <path d="${path}"/>
+          </svg>`;
+      }
+    }
+    if (!customElements.get("ha-icon")) customElements.define("ha-icon", HaIcon);
+  </script>
+
+  <!-- Load components -->
+  <script src="ytmc-player.js"></script>
+  <script src="ytmc-search-play.js"></script>
+
+  <script>
+    /* ── Mock data ── */
+    const TRACKS = [
+      { title: "Natur pur: exotischer Dschungel", artist: "Entspannung & Meditation", image_url: "https://picsum.photos/seed/jungle/300/300", duration: 388 },
+      { title: "Ja, Schatz!", artist: "Bodo Wartke", image_url: "https://picsum.photos/seed/schatz/300/300", duration: 245 },
+      { title: "Liebeslied (Mathematisch korrekt)", artist: "Bodo Wartke", image_url: "https://picsum.photos/seed/liebe/300/300", duration: 312 },
+    ];
+
+    const SEARCH_RESULTS = [
+      { id: "abc123", type: "playlist", title: "Ja, Schatz!", artist: "Bodo Wartke", year: "2005", image_url: "https://picsum.photos/seed/schatz/120/120" },
+      { id: "def456", type: "playlist", title: "Achillesverse", artist: "Bodo Wartke", year: "2019", image_url: "https://picsum.photos/seed/achilles/120/120" },
+      { id: "ghi789", type: "playlist", title: "Bodo Wartke Mix", owner: "YouTube Music", image_url: "https://picsum.photos/seed/mix/120/120" },
+      { id: "jkl012", type: "artist", title: "Bodo Wartke", name: "Bodo Wartke", image_url: "https://picsum.photos/seed/artist/120/120" },
+      { id: "mno345", type: "song", title: "Liebeslied (Mathematisch korrekt)", artist: "Bodo Wartke", image_url: "https://picsum.photos/seed/liebe/120/120" },
+    ];
+
+    const TARGETS = [
+      "media_player.gastebad_nest",
+      "media_player.wohnzimmer_nest",
+      "media_player.schlafzimmer_nest",
+      "media_player.badezimmer_nest",
+      "media_player.chromecast_tv",
+    ];
+
+    const FRIENDLY = {
+      "media_player.gastebad_nest": "Gästebad Nest",
+      "media_player.wohnzimmer_nest": "Wohnzimmer Nest",
+      "media_player.schlafzimmer_nest": "Schlafzimmer Nest",
+      "media_player.badezimmer_nest": "Badezimmer Nest",
+      "media_player.chromecast_tv": "Chromecast TV",
+    };
+
+    /* ── Mock state ── */
+    let mockState = {
+      state: "playing",
+      trackIdx: 0,
+      target: "media_player.gastebad_nest",
+      volume: 0.65,
+      position: 134,
+      shuffle: false,
+      autoplay: false,
+      repeat: "off",
+      hasPrev: false,
+      hasNext: true,
+      searchResults: [],
+      searchQuery: "",
+      targetExternal: false, // target plays something NOT from this connector
+    };
+
+    const ENTITY_ID = "media_player.youtube_music_connector";
+
+    function buildHass() {
+      const track = mockState.trackIdx === "none" ? null : TRACKS[mockState.trackIdx];
+      const dur = track?.duration || 0;
+
+      // When targetExternal is true, the connector itself is idle — the target
+      // plays something independently (e.g. Spotify, radio, another source).
+      const connectorIsActive = !mockState.targetExternal;
+      const connectorEffectiveState = connectorIsActive ? mockState.state : "idle";
+
+      const connectorState = {
+        entity_id: ENTITY_ID,
+        state: connectorEffectiveState,
+        attributes: {
+          friendly_name: "YouTube Music Connector",
+          icon: "mdi:youtube-music",
+          is_youtube_music_connector: true,
+          media_title: connectorIsActive ? (track?.title || "") : "",
+          media_artist: connectorIsActive ? (track?.artist || "") : "",
+          media_image_url: connectorIsActive ? (track?.image_url || "") : "",
+          media_duration: connectorIsActive ? (dur || undefined) : undefined,
+          target_entity_id: mockState.target,
+          available_target_players: TARGETS,
+          current_item: connectorIsActive && track ? { title: track.title, artist: track.artist, image_url: track.image_url, type: "song", id: "vid" + mockState.trackIdx } : {},
+          shuffle_enabled: mockState.shuffle,
+          autoplay_enabled: mockState.autoplay,
+          autoplay_queue_length: mockState.hasNext ? 5 : 0,
+          repeat_mode: mockState.repeat,
+          has_next_track: connectorIsActive ? mockState.hasNext : false,
+          has_previous_track: connectorIsActive ? mockState.hasPrev : false,
+          search_results: mockState.searchResults,
+          search_query: mockState.searchQuery,
+          search_type: "all",
+          search_count: mockState.searchResults.length,
+          last_error: "",
+        },
+      };
+
+      // Target media player state — when external, it's playing its own content
+      const targetEffectiveState = mockState.targetExternal ? "playing" : (mockState.state === "off" ? "idle" : mockState.state);
+      const targetDur = mockState.targetExternal ? 237 : dur; // fake external track duration
+      const targetPos = mockState.targetExternal ? 89 : mockState.position;
+
+      const targetState = {
+        entity_id: mockState.target,
+        state: targetEffectiveState,
+        attributes: {
+          friendly_name: FRIENDLY[mockState.target] || mockState.target,
+          volume_level: mockState.volume,
+          media_position: targetPos,
+          media_position_updated_at: new Date().toISOString(),
+          media_duration: targetDur || undefined,
+          media_title: mockState.targetExternal ? "Some Other Song (not from connector)" : undefined,
+          media_artist: mockState.targetExternal ? "External Source" : undefined,
+          supported_features: 4 | 16, // VOLUME_SET | SEEK
+        },
+      };
+
+      const states = {};
+      states[ENTITY_ID] = connectorState;
+      states[mockState.target] = targetState;
+      TARGETS.forEach(t => {
+        if (!states[t]) {
+          states[t] = {
+            entity_id: t,
+            state: "idle",
+            attributes: { friendly_name: FRIENDLY[t] || t, supported_features: 4 | 16 },
+          };
+        }
+      });
+
+      return {
+        states,
+        callService(domain, service, data) {
+          console.log(`[mock] ${domain}.${service}`, data);
+
+          // Handle service calls to update mock state
+          if (domain === "media_player" && service === "media_pause") {
+            mockState.state = "paused";
+            pushHass();
+          } else if (domain === "media_player" && service === "media_play") {
+            mockState.state = "playing";
+            pushHass();
+          } else if (domain === "media_player" && service === "select_source") {
+            mockState.target = data.source;
+            document.getElementById("ctrl-target").value = data.source;
+            pushHass();
+          } else if (domain === "media_player" && service === "volume_set") {
+            mockState.volume = data.volume_level;
+            document.getElementById("ctrl-volume").value = Math.round(data.volume_level * 100);
+            document.getElementById("vol-val").textContent = Math.round(data.volume_level * 100) + "%";
+            pushHass();
+          } else if (domain === "media_player" && service === "media_seek") {
+            mockState.position = data.seek_position;
+            pushHass();
+          } else if (domain === "youtube_music_connector" && service === "set_autoplay") {
+            mockState.autoplay = data.enabled;
+            syncBtnState("ctrl-autoplay", mockState.autoplay);
+            pushHass();
+          } else if (domain === "youtube_music_connector" && service === "set_shuffle") {
+            mockState.shuffle = data.shuffle_enabled;
+            syncBtnState("ctrl-shuffle", mockState.shuffle);
+            pushHass();
+          } else if (domain === "youtube_music_connector" && service === "set_repeat_mode") {
+            mockState.repeat = data.repeat_mode;
+            document.getElementById("ctrl-repeat").textContent = `Repeat: ${data.repeat_mode}`;
+            pushHass();
+          } else if (domain === "youtube_music_connector" && service === "next_track") {
+            const next = (parseInt(mockState.trackIdx) + 1) % TRACKS.length;
+            mockState.trackIdx = next;
+            mockState.position = 0;
+            mockState.state = "playing";
+            document.getElementById("ctrl-track").value = next;
+            document.getElementById("ctrl-state").value = "playing";
+            pushHass();
+          } else if (domain === "youtube_music_connector" && service === "previous_track") {
+            const prev = (parseInt(mockState.trackIdx) - 1 + TRACKS.length) % TRACKS.length;
+            mockState.trackIdx = prev;
+            mockState.position = 0;
+            mockState.state = "playing";
+            document.getElementById("ctrl-track").value = prev;
+            document.getElementById("ctrl-state").value = "playing";
+            pushHass();
+          } else if (domain === "youtube_music_connector" && service === "search") {
+            mockState.searchResults = SEARCH_RESULTS;
+            mockState.searchQuery = data.query;
+            pushHass();
+          } else if (domain === "youtube_music_connector" && service === "play") {
+            console.log(`[mock] Playing ${data.item_type} ${data.item_id} on ${data.target_entity_id}`);
+            mockState.state = "playing";
+            document.getElementById("ctrl-state").value = "playing";
+            pushHass();
+          }
+
+          return Promise.resolve({});
+        },
+      };
+    }
+
+    function syncBtnState(id, active) {
+      const el = document.getElementById(id);
+      el.classList.toggle("active", active);
+    }
+
+    function pushHass() {
+      const hass = buildHass();
+      document.getElementById("the-player").hass = hass;
+      document.getElementById("the-search").hass = hass;
+    }
+
+    /* ── Wire controls ── */
+    function fmtTime(s) {
+      s = Math.max(0, Math.floor(s));
+      return Math.floor(s/60) + ":" + String(s%60).padStart(2,"0");
+    }
+
+    document.getElementById("ctrl-state").addEventListener("change", e => {
+      mockState.state = e.target.value;
+      pushHass();
+    });
+    document.getElementById("ctrl-track").addEventListener("change", e => {
+      mockState.trackIdx = e.target.value === "none" ? "none" : parseInt(e.target.value);
+      mockState.position = 0;
+      document.getElementById("ctrl-position").max = mockState.trackIdx === "none" ? 100 : TRACKS[mockState.trackIdx].duration;
+      document.getElementById("ctrl-position").value = 0;
+      pushHass();
+    });
+    document.getElementById("ctrl-target").addEventListener("change", e => {
+      mockState.target = e.target.value;
+      pushHass();
+    });
+    document.getElementById("ctrl-volume").addEventListener("input", e => {
+      mockState.volume = parseInt(e.target.value) / 100;
+      document.getElementById("vol-val").textContent = e.target.value + "%";
+      pushHass();
+    });
+    document.getElementById("ctrl-position").addEventListener("input", e => {
+      mockState.position = parseInt(e.target.value);
+      const dur = mockState.trackIdx === "none" ? 0 : TRACKS[mockState.trackIdx].duration;
+      document.getElementById("pos-val").textContent = `${fmtTime(mockState.position)} / ${fmtTime(dur)}`;
+      pushHass();
+    });
+
+    document.getElementById("ctrl-shuffle").addEventListener("click", e => {
+      mockState.shuffle = !mockState.shuffle;
+      syncBtnState("ctrl-shuffle", mockState.shuffle);
+      pushHass();
+    });
+    document.getElementById("ctrl-autoplay").addEventListener("click", e => {
+      mockState.autoplay = !mockState.autoplay;
+      syncBtnState("ctrl-autoplay", mockState.autoplay);
+      pushHass();
+    });
+    document.getElementById("ctrl-repeat").addEventListener("click", e => {
+      const order = ["off", "forever", "once"];
+      mockState.repeat = order[(order.indexOf(mockState.repeat) + 1) % order.length];
+      e.target.textContent = `Repeat: ${mockState.repeat}`;
+      pushHass();
+    });
+    document.getElementById("ctrl-has-prev").addEventListener("click", e => {
+      mockState.hasPrev = !mockState.hasPrev;
+      syncBtnState("ctrl-has-prev", mockState.hasPrev);
+      pushHass();
+    });
+    document.getElementById("ctrl-has-next").addEventListener("click", e => {
+      mockState.hasNext = !mockState.hasNext;
+      syncBtnState("ctrl-has-next", mockState.hasNext);
+      pushHass();
+    });
+    document.getElementById("ctrl-search-results").addEventListener("click", e => {
+      if (mockState.searchResults.length) {
+        mockState.searchResults = [];
+        mockState.searchQuery = "";
+        e.target.textContent = "Load Search Results";
+        syncBtnState("ctrl-search-results", false);
+      } else {
+        mockState.searchResults = SEARCH_RESULTS;
+        mockState.searchQuery = "Bodo Wartke";
+        e.target.textContent = "Clear Results";
+        syncBtnState("ctrl-search-results", true);
+      }
+      pushHass();
+    });
+
+    // Target external toggle
+    document.getElementById("ctrl-target-external").addEventListener("click", e => {
+      mockState.targetExternal = !mockState.targetExternal;
+      syncBtnState("ctrl-target-external", mockState.targetExternal);
+      pushHass();
+    });
+
+    // Scenario presets
+    function applyPreset(preset) {
+      // Reset all control button states first
+      const resetBtns = ["ctrl-shuffle","ctrl-autoplay","ctrl-has-prev","ctrl-has-next","ctrl-search-results","ctrl-target-external"];
+      resetBtns.forEach(id => syncBtnState(id, false));
+      document.getElementById("ctrl-repeat").textContent = "Repeat: off";
+      document.getElementById("ctrl-search-results").textContent = "Load Search Results";
+
+      if (preset === "fresh") {
+        // First open — nothing happened yet
+        Object.assign(mockState, {
+          state: "off", trackIdx: "none", position: 0, shuffle: false, autoplay: false,
+          repeat: "off", hasPrev: false, hasNext: false, searchResults: [], searchQuery: "",
+          targetExternal: false,
+        });
+      } else if (preset === "playing") {
+        // Connector is actively playing
+        Object.assign(mockState, {
+          state: "playing", trackIdx: 0, position: 134, shuffle: false, autoplay: false,
+          repeat: "off", hasPrev: false, hasNext: true, searchResults: [], searchQuery: "",
+          targetExternal: false,
+        });
+        syncBtnState("ctrl-has-next", true);
+      } else if (preset === "paused") {
+        Object.assign(mockState, {
+          state: "paused", trackIdx: 1, position: 67, shuffle: false, autoplay: false,
+          repeat: "off", hasPrev: true, hasNext: true, searchResults: [], searchQuery: "",
+          targetExternal: false,
+        });
+        syncBtnState("ctrl-has-next", true);
+        syncBtnState("ctrl-has-prev", true);
+      } else if (preset === "external") {
+        // Target plays something NOT from this connector
+        Object.assign(mockState, {
+          state: "idle", trackIdx: "none", position: 0, shuffle: false, autoplay: false,
+          repeat: "off", hasPrev: false, hasNext: false, searchResults: [], searchQuery: "",
+          targetExternal: true,
+        });
+        syncBtnState("ctrl-target-external", true);
+      } else if (preset === "searched") {
+        // Searched but not yet played
+        Object.assign(mockState, {
+          state: "idle", trackIdx: "none", position: 0, shuffle: false, autoplay: true,
+          repeat: "off", hasPrev: false, hasNext: false, searchResults: SEARCH_RESULTS,
+          searchQuery: "Bodo Wartke", targetExternal: false,
+        });
+        syncBtnState("ctrl-autoplay", true);
+        syncBtnState("ctrl-search-results", true);
+        document.getElementById("ctrl-search-results").textContent = "Clear Results";
+      } else if (preset === "full") {
+        // Everything active
+        Object.assign(mockState, {
+          state: "playing", trackIdx: 2, position: 180, shuffle: true, autoplay: true,
+          repeat: "forever", hasPrev: true, hasNext: true, searchResults: SEARCH_RESULTS,
+          searchQuery: "Bodo Wartke", targetExternal: false,
+        });
+        syncBtnState("ctrl-shuffle", true);
+        syncBtnState("ctrl-autoplay", true);
+        syncBtnState("ctrl-has-prev", true);
+        syncBtnState("ctrl-has-next", true);
+        syncBtnState("ctrl-search-results", true);
+        document.getElementById("ctrl-search-results").textContent = "Clear Results";
+        document.getElementById("ctrl-repeat").textContent = "Repeat: forever";
+      }
+
+      // Sync dropdowns/sliders
+      document.getElementById("ctrl-state").value = mockState.state === "off" ? "off" : mockState.state;
+      document.getElementById("ctrl-track").value = mockState.trackIdx === "none" ? "none" : mockState.trackIdx;
+      document.getElementById("ctrl-volume").value = Math.round(mockState.volume * 100);
+      document.getElementById("vol-val").textContent = Math.round(mockState.volume * 100) + "%";
+      const dur = mockState.trackIdx === "none" ? 100 : TRACKS[mockState.trackIdx].duration;
+      document.getElementById("ctrl-position").max = dur;
+      document.getElementById("ctrl-position").value = mockState.position;
+      document.getElementById("pos-val").textContent = `${fmtTime(mockState.position)} / ${fmtTime(dur)}`;
+
+      pushHass();
+    }
+
+    ["fresh","playing","paused","external","searched","full"].forEach(p => {
+      document.getElementById("preset-" + p).addEventListener("click", () => applyPreset(p));
+    });
+
+    // Theme overrides
+    const wrapper = document.querySelector(".page");
+    document.getElementById("theme-bg").addEventListener("input", e => {
+      wrapper.style.setProperty("--ytmc-bg", e.target.value);
+    });
+    document.getElementById("theme-accent").addEventListener("input", e => {
+      wrapper.style.setProperty("--ytmc-accent", e.target.value);
+      wrapper.style.setProperty("--ytmc-accent-active", e.target.value);
+    });
+    document.getElementById("theme-text").addEventListener("input", e => {
+      wrapper.style.setProperty("--ytmc-text", e.target.value);
+    });
+
+    /* ── Init ── */
+    const player = document.getElementById("the-player");
+    const search = document.getElementById("the-search");
+    player.entityId = ENTITY_ID;
+    search.entityId = ENTITY_ID;
+    pushHass();
+
+    // Simulate position ticking when playing
+    setInterval(() => {
+      if (mockState.state === "playing" && mockState.trackIdx !== "none" && !mockState.targetExternal) {
+        const dur = TRACKS[mockState.trackIdx].duration;
+        mockState.position = Math.min(mockState.position + 1, dur);
+        const slider = document.getElementById("ctrl-position");
+        slider.value = mockState.position;
+        document.getElementById("pos-val").textContent = `${fmtTime(mockState.position)} / ${fmtTime(dur)}`;
+      }
+    }, 1000);
+  </script>
+</body>
+</html>

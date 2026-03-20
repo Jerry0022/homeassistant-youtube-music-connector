@@ -38,7 +38,10 @@ from .const import (
     SEARCH_TYPE_ALL,
     SEARCH_TYPES,
     SERVICE_EXECUTE,
+    SERVICE_NEXT_TRACK,
     SERVICE_PLAY,
+    SERVICE_PLAY_ON,
+    SERVICE_PREVIOUS_TRACK,
     SERVICE_RESOLVE_STREAM,
     SERVICE_SEARCH,
     SERVICE_SET_REPEAT_MODE,
@@ -134,6 +137,18 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     async def execute_service(call: ServiceCall) -> dict[str, Any]:
         manager = _manager_from_entity_id(hass, call.data["entity_id"])
         return await manager.async_execute(dict(call.data))
+
+    async def play_on_service(call: ServiceCall) -> dict[str, Any]:
+        manager = _manager_from_entity_id(hass, call.data["entity_id"])
+        return await manager.async_play_on(call.data[ATTR_TARGET_ENTITY_ID], call.data[ATTR_ITEM_TYPE], call.data[ATTR_ITEM_ID])
+
+    async def next_track_service(call: ServiceCall) -> dict[str, Any]:
+        manager = _manager_from_entity_id(hass, call.data["entity_id"])
+        return await manager.async_next_track()
+
+    async def previous_track_service(call: ServiceCall) -> dict[str, Any]:
+        manager = _manager_from_entity_id(hass, call.data["entity_id"])
+        return await manager.async_previous_track()
 
     hass.services.async_register(
         DOMAIN,
@@ -246,6 +261,42 @@ async def _async_register_services(hass: HomeAssistant) -> None:
                 vol.Optional(ATTR_SHUFFLE_ENABLED): cv.boolean,
                 vol.Optional(ATTR_REPEAT_MODE): vol.In(ACCEPTED_REPEAT_MODES),
                 vol.Optional(ATTR_VOLUME_PERCENT): vol.Coerce(int),
+            }
+        ),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_PLAY_ON,
+        play_on_service,
+        schema=vol.Schema(
+            {
+                vol.Required("entity_id"): cv.entity_id,
+                vol.Required(ATTR_TARGET_ENTITY_ID): cv.entity_id,
+                vol.Required(ATTR_ITEM_TYPE): cv.string,
+                vol.Required(ATTR_ITEM_ID): cv.string,
+            }
+        ),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_NEXT_TRACK,
+        next_track_service,
+        schema=vol.Schema(
+            {
+                vol.Required("entity_id"): cv.entity_id,
+            }
+        ),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_PREVIOUS_TRACK,
+        previous_track_service,
+        schema=vol.Schema(
+            {
+                vol.Required("entity_id"): cv.entity_id,
             }
         ),
         supports_response=SupportsResponse.OPTIONAL,

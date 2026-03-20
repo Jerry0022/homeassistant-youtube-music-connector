@@ -1,6 +1,6 @@
 # Home Assistant YouTube Music Connector
 
-**Version: 0.4.0**
+**Version: 0.6.0**
 
 Custom Home Assistant integration for browsing YouTube Music, playing results on compatible media players, and controlling playback from a sidebar app and Lovelace widget.
 
@@ -96,14 +96,46 @@ This repository now supports both Home Assistant installation paths:
 - HACS custom integration repository
 - Home Assistant app / add-on repository via `repository.yaml`
 
-## Included UI
+## Lovelace Cards
 
-The shipped package already includes both Home Assistant UI surfaces:
+The integration ships two Lovelace cards that are **automatically registered** — no manual resource setup needed.
 
-- Sidebar panel UI from `custom_components/youtube_music_connector/frontend`
-- Lovelace widget from `www/community/youtube-music-connector/youtube-music-connector.js`
+### ytmc-player
 
-The current UI on your `H:` Home Assistant config matches the UI already committed in this repository, so other users can install the same panel and widget directly from the repo.
+Now-playing card with album art, transport controls, volume, progress/seek, and multi-device selection.
+
+```yaml
+type: custom:ytmc-player
+entity: media_player.youtube_music_connector
+exclude_devices:
+  - media_player.kitchen_display
+```
+
+### ytmc-search-play
+
+Search YouTube Music and play results on selected devices.
+
+```yaml
+type: custom:ytmc-search-play
+entity: media_player.youtube_music_connector
+exclude_devices:
+  - media_player.office_tv
+```
+
+### Config parameters (both cards)
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `entity` | string | *(required)* | Entity ID of the YouTube Music Connector |
+| `exclude_devices` | string[] | `[]` | Media player entity IDs to hide from device selector |
+
+### Multi-device group playback
+
+Click multiple device chips to play on all of them simultaneously. Volume, play/pause/stop, and track changes are mirrored to all group members. Deselect to return to single-device mode.
+
+### CSS theming
+
+Both cards support CSS custom properties: `--ytmc-bg`, `--ytmc-surface`, `--ytmc-text`, `--ytmc-text-secondary`, `--ytmc-accent`, `--ytmc-accent-active`, `--ytmc-radius`, `--ytmc-font-family`. See [docs/components.md](docs/components.md) for details.
 
 ## Updating
 

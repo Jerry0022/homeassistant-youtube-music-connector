@@ -111,6 +111,6 @@ TITLE_PREFIX = "YouTube Music Connector "
 
 PANEL_URL_PATH = "youtube-music-connector"
 PANEL_TITLE = "YouTube Music"
-PANEL_ICON = "mdi:youtube-music"
+PANEL_ICON = "mdi:music"
 PANEL_COMPONENT_NAME = "youtube-music-connector-panel"
 PANEL_MODULE_PATH = "/api/youtube_music_connector/static/youtube-music-connector-panel.js?v=0.6.6"

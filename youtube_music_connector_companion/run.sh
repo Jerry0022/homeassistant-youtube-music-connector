@@ -95,6 +95,35 @@ verify_install() {
     fi
 }
 
+send_restart_notification() {
+    local version="$1"
+    local notification_id="youtube_music_connector_restart_required"
+    local title="YouTube Music Connector updated to v${version}"
+    local message="The YouTube Music Connector integration has been updated. **Please restart Home Assistant** to activate the new version."
+
+    # Wait for HA Core API to become available (may not be ready during boot)
+    local retries=0
+    while [ $retries -lt 30 ]; do
+        if curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
+            "http://supervisor/core/api/" 2>/dev/null | grep -q "200"; then
+            break
+        fi
+        retries=$((retries + 1))
+        sleep 2
+    done
+
+    curl -s -o /dev/null -X POST \
+        -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
+        -H "Content-Type: application/json" \
+        "http://supervisor/core/api/services/persistent_notification/create" \
+        -d "{\"notification_id\": \"${notification_id}\", \"title\": \"${title}\", \"message\": \"${message}\"}" \
+        && bashio::log.info "Restart notification created" \
+        || bashio::log.warning "Could not create restart notification (non-critical)"
+}
+
+# ── Main ──
+
 if [ ! -d "$INTEGRATION_SOURCE" ]; then
     bashio::log.fatal "Bundled integration payload not found: $INTEGRATION_SOURCE"
 fi
@@ -104,38 +133,39 @@ if [ ! -f "$LOVELACE_SOURCE" ]; then
 fi
 
 SOURCE_VERSION="$(read_version "$SOURCE_MANIFEST")"
+INSTALLED_VERSION="$(read_version "$TARGET_MANIFEST")"
 
 bashio::log.info "Bundled integration version: $SOURCE_VERSION"
 bashio::log.info "Bundled auth import diagnostics marker: $(has_diagnostics_marker "$SOURCE_AUTH_IMPORT")"
-bashio::log.info "Installed integration version before copy: $(read_version "$TARGET_MANIFEST")"
+bashio::log.info "Installed integration version before copy: $INSTALLED_VERSION"
 bashio::log.info "Installed auth import diagnostics marker before copy: $(has_diagnostics_marker "$TARGET_AUTH_IMPORT")"
 
-bashio::log.info "Installing bundled custom integration into /config/custom_components"
-copy_tree "$INTEGRATION_SOURCE" "$INTEGRATION_TARGET"
+# Only copy if versions differ or target is missing
+if [ "$INSTALLED_VERSION" != "$SOURCE_VERSION" ]; then
+    bashio::log.info "Installing bundled custom integration into /config/custom_components"
+    copy_tree "$INTEGRATION_SOURCE" "$INTEGRATION_TARGET"
 
-bashio::log.info "Installing bundled Lovelace asset into /config/www/community"
-copy_file "$LOVELACE_SOURCE" "$LOVELACE_TARGET"
+    bashio::log.info "Installing bundled Lovelace asset into /config/www/community"
+    copy_file "$LOVELACE_SOURCE" "$LOVELACE_TARGET"
 
-TARGET_VERSION="$(read_version "$TARGET_MANIFEST")"
-TARGET_DIAGNOSTICS_MARKER="$(has_diagnostics_marker "$TARGET_AUTH_IMPORT")"
+    TARGET_VERSION="$(read_version "$TARGET_MANIFEST")"
+    TARGET_DIAGNOSTICS_MARKER="$(has_diagnostics_marker "$TARGET_AUTH_IMPORT")"
 
-bashio::log.info "Installed integration version after copy: $TARGET_VERSION"
-bashio::log.info "Installed auth import diagnostics marker after copy: $TARGET_DIAGNOSTICS_MARKER"
+    bashio::log.info "Installed integration version after copy: $TARGET_VERSION"
+    bashio::log.info "Installed auth import diagnostics marker after copy: $TARGET_DIAGNOSTICS_MARKER"
 
-verify_install "$SOURCE_VERSION" "$TARGET_VERSION" "$TARGET_DIAGNOSTICS_MARKER"
-write_install_state "$SOURCE_VERSION" "$TARGET_VERSION" "$TARGET_DIAGNOSTICS_MARKER" true
-bashio::log.info "Wrote installer state to $INSTALL_STATE_PATH"
+    verify_install "$SOURCE_VERSION" "$TARGET_VERSION" "$TARGET_DIAGNOSTICS_MARKER"
+    write_install_state "$SOURCE_VERSION" "$TARGET_VERSION" "$TARGET_DIAGNOSTICS_MARKER" true
+    bashio::log.info "Wrote installer state to $INSTALL_STATE_PATH"
 
-bashio::log.warning "Installation complete. Restart Home Assistant before configuring the integration."
+    bashio::log.warning "Integration updated to v${TARGET_VERSION}. Home Assistant restart required."
+    send_restart_notification "$TARGET_VERSION"
+else
+    bashio::log.info "Integration is already at v${INSTALLED_VERSION}, no update needed."
+fi
 
-# Create a persistent notification so the user sees the restart prompt in the HA UI
-NOTIFICATION_ID="youtube_music_connector_restart_required"
-NOTIFICATION_TITLE="YouTube Music Connector updated to v${TARGET_VERSION}"
-NOTIFICATION_MESSAGE="The YouTube Music Connector integration has been updated. **Please restart Home Assistant** to activate the new version."
-
-curl -s -o /dev/null -X POST \
-  -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
-  -H "Content-Type: application/json" \
-  "http://supervisor/core/api/services/persistent_notification/create" \
-  -d "{\"notification_id\": \"${NOTIFICATION_ID}\", \"title\": \"${NOTIFICATION_TITLE}\", \"message\": \"${NOTIFICATION_MESSAGE}\"}" \
-  || bashio::log.warning "Could not create restart notification (non-critical)"
+# Stay running so the Supervisor keeps this add-on in "started" state.
+# This ensures the add-on auto-restarts after updates (boot: auto),
+# which triggers the install/update logic above with the new payload.
+bashio::log.info "Add-on is running. It will re-deploy automatically after updates."
+exec sleep infinity

@@ -208,7 +208,16 @@ class YtmcPlayer extends HTMLElement {
     const e = this._entity;
     if (!e) return "";
     const a = e.attributes || {};
-    return JSON.stringify([e.state, a.media_title, a.media_artist, a.media_image_url, a.target_entity_id, a.available_target_players, a.shuffle_enabled, a.repeat_mode, a.has_next_track, a.has_previous_track, a.autoplay_enabled, a.autoplay_queue_length, a.group_targets, [...this._selectedTargets].sort().join()]);
+    const tid = a.target_entity_id;
+    const t = tid ? this._hass?.states?.[tid] : null;
+    const tState = t?.state;
+    const tVol = t?.attributes?.volume_level;
+    const tDur = t?.attributes?.media_duration;
+    const tPosUp = t?.attributes?.media_position_updated_at;
+    const groupVols = this._selectedTargets.size > 1
+      ? [...this._selectedTargets].map(id => this._hass?.states?.[id]?.attributes?.volume_level).join()
+      : "";
+    return JSON.stringify([e.state, a.media_title, a.media_artist, a.media_image_url, tid, a.available_target_players, a.shuffle_enabled, a.repeat_mode, a.has_next_track, a.has_previous_track, a.autoplay_enabled, a.autoplay_queue_length, a.group_targets, [...this._selectedTargets].sort().join(), tState, tVol, tDur, tPosUp, groupVols]);
   }
   _tryRender() { const s = this._sig(); if (s === this._renderSig) return; this._renderSig = s; this._render(); }
 

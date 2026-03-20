@@ -840,7 +840,8 @@ class YoutubeMusicConnectorPanel extends HTMLElement {
   }
 
   _escape(value) {
-    return (value || "").replace(/[&<>"']/g, (match) => ({
+    const normalized = value == null ? "" : String(value);
+    return normalized.replace(/[&<>"']/g, (match) => ({
       "&": "&amp;",
       "<": "&lt;",
       ">": "&gt;",
@@ -850,14 +851,14 @@ class YoutubeMusicConnectorPanel extends HTMLElement {
   }
 
   _imageSrc(value) {
-    if (value) {
+    if (typeof value === "string" && value) {
       return value;
     }
     return "data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'%3E%3Crect width='96' height='96' rx='20' fill='%23242d39'/%3E%3Cpath d='M33 28v40l34-20-34-20z' fill='%23f15152'/%3E%3C/svg%3E";
   }
 
   _statusImageSrc(value, statusKind = "unknown_playback") {
-    if (value) {
+    if (typeof value === "string" && value) {
       return value;
     }
     if (statusKind === "idle_empty") {
@@ -908,10 +909,23 @@ class YoutubeMusicConnectorPanel extends HTMLElement {
   }
 
   _displayResultCode(value) {
-    if (!value) {
+    const normalized = value == null ? "" : String(value);
+    if (!normalized) {
       return "";
     }
-    return value.length > 5 ? `${value.slice(0, 5)}...` : value;
+    return normalized.length > 5 ? `${normalized.slice(0, 5)}...` : normalized;
+  }
+
+  _asObject(value) {
+    return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  }
+
+  _asArray(value) {
+    return Array.isArray(value) ? value : [];
+  }
+
+  _asString(value) {
+    return value == null ? "" : String(value);
   }
 
   _activeResultFilters() {
@@ -921,6 +935,7 @@ class YoutubeMusicConnectorPanel extends HTMLElement {
   }
 
   _visibleResults(results) {
+    results = this._asArray(results);
     const activeFilters = this._activeResultFilters();
     if (!activeFilters.length) {
       return results;
@@ -972,26 +987,27 @@ class YoutubeMusicConnectorPanel extends HTMLElement {
 
     const entity = this._entity;
     const attrs = entity?.attributes || {};
-    const results = attrs.search_results || [];
-    const current = attrs.current_item || {};
+    const results = this._asArray(attrs.search_results);
+    const current = this._asObject(attrs.current_item);
     const hasCurrentItem = !!(current.id || current.title || current.playlist_name || current.artist);
-    const targets = attrs.available_target_players || [];
-    const currentTarget = attrs.target_entity_id || "";
+    const targets = this._asArray(attrs.available_target_players);
+    const currentTarget = this._asString(attrs.target_entity_id);
     const activeTarget = this._resolveCurrentTarget(currentTarget);
     const volumePercent = this._effectiveTargetVolumePercent(activeTarget);
     const supportsVolume = this._supportsVolume(activeTarget);
     const autoplayEnabled = !!attrs.autoplay_enabled;
     const autoplayQueueLength = Number(attrs.autoplay_queue_length || 0);
     const shuffleEnabled = !!attrs.shuffle_enabled;
-    const repeatMode = attrs.repeat_mode || "off";
-    const state = entity?.state || "off";
+    const repeatMode = this._asString(attrs.repeat_mode) || "off";
+    const state = this._asString(entity?.state) || "off";
     const hasUnknownExternalPlayback = !hasCurrentItem && state === "playing";
     const pendingPlayback = this._isPendingPlaybackActive();
     const transportLabel = pendingPlayback ? "Starting..." : state === "playing" ? "Pause" : "Play";
     const transportIcon = pendingPlayback ? "" : state === "playing" ? "mdi:pause" : "mdi:play";
     const visibleResults = this._visibleResults(results);
     const limitNumber = Number(this._normalizeLimitValue(this._draft.limit || 5));
-    const canLoadMore = !this._searchLoading && this._draft.query.trim() !== "" && results.length >= limitNumber && limitNumber < 99;
+    const draftQuery = this._asString(this._draft.query);
+    const canLoadMore = !this._searchLoading && draftQuery.trim() !== "" && results.length >= limitNumber && limitNumber < 99;
 
     this.shadowRoot.innerHTML = `
       <style>
@@ -1795,25 +1811,25 @@ class YoutubeMusicConnectorPanel extends HTMLElement {
                 <div class="main">${this._escape(hasCurrentItem ? (current.title || current.playlist_name || current.artist) : hasUnknownExternalPlayback ? "Playback active" : "Nothing active yet")}</div>
                 <div class="muted">${this._escape(hasCurrentItem ? (current.artist || (current.type ? `${current.type} ready` : "")) : hasUnknownExternalPlayback ? "Audio is already playing on the selected target, but the connector does not know the title." : "Ready for playback")}</div>
                 <div class="muted">Status: ${this._escape(entity?.state || "off")}</div>
-                <div class="now-mode-row">
-                  ${hasCurrentItem ? `
+                ${hasCurrentItem ? `
+                  <div class="now-mode-row">
                     <button class="secondary ${pendingPlayback ? "button-loading" : ""}" id="play_pause_btn" ${pendingPlayback ? "disabled" : ""}>
                       <span class="button-content">
                         ${pendingPlayback ? `<span class="button-spinner"></span>` : `<ha-icon icon="${transportIcon}"></ha-icon>`}
                         <span>${transportLabel}</span>
                       </span>
                     </button>
-                  ` : ""}
-                  <button class="icon-toggle ${autoplayEnabled ? "active" : ""}" id="autoplay_btn" title="${autoplayEnabled ? `Autoplay On (${autoplayQueueLength} queued)` : "Autoplay Off"}">
-                    <ha-icon icon="mdi:playlist-play"></ha-icon>
-                  </button>
-                  <button class="icon-toggle ${shuffleEnabled ? "active" : ""}" id="shuffle_btn" title="${shuffleEnabled ? "Shuffle On" : "Shuffle Off"}">
-                    <ha-icon icon="mdi:shuffle-variant"></ha-icon>
-                  </button>
-                  <button class="icon-toggle ${repeatMode !== "off" ? "active" : ""}" id="repeat_btn" title="${this._repeatTitle(repeatMode)}">
-                    <ha-icon icon="${this._repeatIcon(repeatMode)}"></ha-icon>
-                  </button>
-                </div>
+                    <button class="icon-toggle ${autoplayEnabled ? "active" : ""}" id="autoplay_btn" title="${autoplayEnabled ? `Autoplay On (${autoplayQueueLength} queued)` : "Autoplay Off"}">
+                      <ha-icon icon="mdi:playlist-play"></ha-icon>
+                    </button>
+                    <button class="icon-toggle ${shuffleEnabled ? "active" : ""}" id="shuffle_btn" title="${shuffleEnabled ? "Shuffle On" : "Shuffle Off"}">
+                      <ha-icon icon="mdi:shuffle-variant"></ha-icon>
+                    </button>
+                    <button class="icon-toggle ${repeatMode !== "off" ? "active" : ""}" id="repeat_btn" title="${this._repeatTitle(repeatMode)}">
+                      <ha-icon icon="${this._repeatIcon(repeatMode)}"></ha-icon>
+                    </button>
+                  </div>
+                ` : ""}
                 ${supportsVolume ? `
                   <div class="volume-row">
                     <div class="muted">Volume</div>

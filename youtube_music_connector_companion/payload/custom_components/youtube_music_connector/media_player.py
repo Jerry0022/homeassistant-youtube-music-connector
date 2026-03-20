@@ -83,6 +83,10 @@ class YoutubeMusicConnectorMediaPlayer(MediaPlayerEntity):
         )
         if self._manager.target_supports_seek:
             supported |= MediaPlayerEntityFeature.SEEK
+        if self._manager.has_next_track:
+            supported |= MediaPlayerEntityFeature.NEXT_TRACK
+        if self._manager.has_previous_track:
+            supported |= MediaPlayerEntityFeature.PREVIOUS_TRACK
         return supported
 
     @property
@@ -103,6 +107,12 @@ class YoutubeMusicConnectorMediaPlayer(MediaPlayerEntity):
 
     async def async_media_seek(self, position: float) -> None:
         await self._manager.async_media_seek(position)
+
+    async def async_media_next_track(self) -> None:
+        await self._manager.async_next_track()
+
+    async def async_media_previous_track(self) -> None:
+        await self._manager.async_previous_track()
 
     async def async_play_media(self, media_type: MediaType | str, media_id: str, **kwargs: Any) -> None:
         item_type = kwargs.get("item_type")

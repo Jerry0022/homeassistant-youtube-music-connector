@@ -28,11 +28,23 @@ These instructions apply to the whole repository.
   - bump patch for fixes, docs, repo maintenance, and branding-only changes
   - bump minor for new functionality
   - bump major only when explicitly requested
-- Prefer using `python scripts/bump_versions.py --part <patch|minor|major>` instead of editing version strings manually.
+- Prefer using `python scripts/bump_versions.py --part <patch|minor|major>` instead of editing version strings manually. This script also syncs the add-on payload automatically.
 - Treat version updates as mandatory release hygiene:
   1. Bump both shipped versions in the same change.
   2. Keep `PANEL_MODULE_PATH` cache-busting aligned with the integration version.
   3. Check the repo for stale version strings before finishing.
+
+## Release checklist
+Every change that affects shipped files must go through this full flow:
+1. **Version bump**: Run `python scripts/bump_versions.py --part <patch|minor|major>` (syncs payload automatically).
+2. **Verify alignment**: Run `python scripts/bump_versions.py --check` and `python scripts/sync_addon_payload.py --check`.
+3. **Commit, push, PR, merge**: Create a PR against `main`, merge it.
+4. **GitHub Release**: Create a release with `gh release create vX.Y.Z --target main` — this is required for:
+   - **HACS** to detect the new integration version.
+   - **HA add-on store** to offer the update to users.
+5. **Verify end-to-end**: After the release, both the add-on AND the integration must show the new version in Home Assistant. The add-on's `run.sh` copies the payload to `/config/custom_components/`, so a stale payload means the integration stays on the old version even when the add-on updates.
+
+Skipping any step (especially the GitHub Release or payload sync) will cause version mismatches between add-on and integration.
 
 ## Branding rules
 - Keep add-on icons in `youtube_music_connector_companion/`.

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import math
 import random
 from urllib.parse import parse_qs, urlparse
 from collections.abc import Callable
@@ -468,18 +467,7 @@ class YoutubeMusicConnectorManager:
             api = await self.async_ensure_api()
             raw_results: list[dict[str, Any]] = []
             if search_type == SEARCH_TYPE_ALL:
-                per_type = max(2, math.ceil(limit / 3))
-                partial_failures: list[str] = []
-                for current_filter in (SEARCH_TYPE_SONGS, SEARCH_TYPE_ARTISTS, SEARCH_TYPE_PLAYLISTS):
-                    try:
-                        part = await api.async_search(query=query, filter_name=current_filter, limit=per_type)
-                    except Exception as err:
-                        partial_failures.append(f"{current_filter}: {err}")
-                        _LOGGER.warning("Search subrequest failed for filter '%s': %s", current_filter, err)
-                        continue
-                    raw_results.extend(part)
-                if not raw_results and partial_failures:
-                    raise HomeAssistantError("; ".join(partial_failures))
+                raw_results = await api.async_search(query=query, filter_name=None, limit=limit * 3)
             else:
                 raw_results = await api.async_search(query=query, filter_name=search_type, limit=limit)
 
@@ -491,8 +479,9 @@ class YoutubeMusicConnectorManager:
                     continue
                 normalized.append(normalized_item)
                 self._search_index[(normalized_item["type"], normalized_item["id"])] = normalized_item
-                if len(normalized) >= limit:
-                    break
+
+            normalized = self._rank_results(normalized, query)
+            normalized = normalized[:limit]
 
             payload[ATTR_RESULTS] = normalized
             payload["count"] = len(normalized)
@@ -506,6 +495,24 @@ class YoutubeMusicConnectorManager:
             self.async_notify()
             _LOGGER.exception("YouTube Music search failed for query '%s'", query)
             raise HomeAssistantError(f"YouTube Music search failed: {err}") from err
+
+    @staticmethod
+    def _rank_results(results: list[dict[str, Any]], query: str) -> list[dict[str, Any]]:
+        """Re-rank results by how many query tokens match across all fields."""
+        tokens = [t.lower() for t in query.split() if t]
+        if not tokens:
+            return results
+
+        def score(item: dict[str, Any]) -> float:
+            text = " ".join([
+                item.get("title", ""),
+                item.get("artist", ""),
+                item.get("playlist_name", ""),
+            ]).lower()
+            matched = sum(1 for t in tokens if t in text)
+            return matched / len(tokens)
+
+        return sorted(results, key=score, reverse=True)
 
     def _normalize_result(self, item: dict[str, Any]) -> dict[str, Any] | None:
         result_type = item.get("resultType")

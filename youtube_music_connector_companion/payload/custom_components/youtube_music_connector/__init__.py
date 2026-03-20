@@ -56,12 +56,31 @@ from .panel import async_register_panel, async_unregister_panel
 
 _LOGGER = logging.getLogger(__name__)
 INSTALL_STATE_PATH = Path("/config/.storage/youtube_music_connector_installer.json")
+RESTART_MARKER_PATH = Path("/config/.storage/youtube_music_connector_restart_needed.json")
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     _log_runtime_diagnostics()
     hass.data.setdefault(DOMAIN, {})
+    _check_restart_marker(hass)
     return True
+
+
+def _check_restart_marker(hass: HomeAssistant) -> None:
+    """Create persistent notification from add-on restart marker file if present."""
+    try:
+        if not RESTART_MARKER_PATH.is_file():
+            return
+        data = json.loads(RESTART_MARKER_PATH.read_text(encoding="utf-8"))
+        RESTART_MARKER_PATH.unlink(missing_ok=True)
+        hass.components.persistent_notification.async_create(
+            message=data.get("message", "The integration was updated. Please restart Home Assistant."),
+            title=data.get("title", "YouTube Music Connector updated"),
+            notification_id=data.get("notification_id", RESTART_NOTIFICATION_ID),
+        )
+        _LOGGER.info("Created restart notification from add-on marker file")
+    except Exception:
+        _LOGGER.debug("No restart marker to process", exc_info=True)
 
 
 RESTART_NOTIFICATION_ID = "youtube_music_connector_restart_required"

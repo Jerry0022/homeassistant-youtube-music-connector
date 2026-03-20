@@ -174,6 +174,21 @@ previous_track:
         entity:
           domain: media_player
 
+set_group_targets:
+  description: "Set additional target media players for synchronized group playback. All play, pause, stop, and track-change operations will be mirrored to group targets."
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          domain: media_player
+    group_targets:
+      required: true
+      selector:
+        entity:
+          domain: media_player
+          multiple: true
+
 execute:
   description: "Unified programmatic entrypoint for scripts and automations. Supports text search, direct YouTube Music IDs, or a full YouTube Music URL, plus target player and playback modes in one call."
   fields:

@@ -127,3 +127,15 @@ write_install_state "$SOURCE_VERSION" "$TARGET_VERSION" "$TARGET_DIAGNOSTICS_MAR
 bashio::log.info "Wrote installer state to $INSTALL_STATE_PATH"
 
 bashio::log.warning "Installation complete. Restart Home Assistant before configuring the integration."
+
+# Create a persistent notification so the user sees the restart prompt in the HA UI
+NOTIFICATION_ID="youtube_music_connector_restart_required"
+NOTIFICATION_TITLE="YouTube Music Connector updated to v${TARGET_VERSION}"
+NOTIFICATION_MESSAGE="The YouTube Music Connector integration has been updated. **Please restart Home Assistant** to activate the new version."
+
+curl -s -o /dev/null -X POST \
+  -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
+  -H "Content-Type: application/json" \
+  "http://supervisor/core/api/services/persistent_notification/create" \
+  -d "{\"notification_id\": \"${NOTIFICATION_ID}\", \"title\": \"${NOTIFICATION_TITLE}\", \"message\": \"${NOTIFICATION_MESSAGE}\"}" \
+  || bashio::log.warning "Could not create restart notification (non-critical)"

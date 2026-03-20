@@ -30,6 +30,7 @@ from .const import (
     ATTR_SHUFFLE_ENABLED,
     ATTR_SONG_ID,
     ATTR_TARGET_ENTITY_ID,
+    ATTR_GROUP_TARGETS,
     ATTR_VOLUME_PERCENT,
     ATTR_YOUTUBE_URL,
     ACCEPTED_REPEAT_MODES,
@@ -44,6 +45,7 @@ from .const import (
     SERVICE_PREVIOUS_TRACK,
     SERVICE_RESOLVE_STREAM,
     SERVICE_SEARCH,
+    SERVICE_SET_GROUP_TARGETS,
     SERVICE_SET_REPEAT_MODE,
     SERVICE_SET_SHUFFLE,
     SERVICE_STOP,
@@ -62,8 +64,17 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     return True
 
 
+RESTART_NOTIFICATION_ID = "youtube_music_connector_restart_required"
+
+
 async def async_setup_entry(hass: HomeAssistant, entry) -> bool:
     _log_runtime_diagnostics()
+    await hass.services.async_call(
+        "persistent_notification",
+        "dismiss",
+        {"notification_id": RESTART_NOTIFICATION_ID},
+        blocking=False,
+    )
     manager = YoutubeMusicConnectorManager(hass, entry)
     domain_data = hass.data.setdefault(DOMAIN, {})
     domain_data[entry.entry_id] = manager
@@ -149,6 +160,11 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     async def previous_track_service(call: ServiceCall) -> dict[str, Any]:
         manager = _manager_from_entity_id(hass, call.data["entity_id"])
         return await manager.async_previous_track()
+
+    async def set_group_targets_service(call: ServiceCall) -> dict[str, Any]:
+        manager = _manager_from_entity_id(hass, call.data["entity_id"])
+        targets = call.data.get(ATTR_GROUP_TARGETS, [])
+        return await manager.async_set_group_targets(list(targets))
 
     hass.services.async_register(
         DOMAIN,
@@ -297,6 +313,20 @@ async def _async_register_services(hass: HomeAssistant) -> None:
         schema=vol.Schema(
             {
                 vol.Required("entity_id"): cv.entity_id,
+            }
+        ),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_GROUP_TARGETS,
+        set_group_targets_service,
+        schema=vol.Schema(
+            {
+                vol.Required("entity_id"): cv.entity_id,
+                vol.Required(ATTR_GROUP_TARGETS): vol.All(
+                    cv.ensure_list, [cv.entity_id]
+                ),
             }
         ),
         supports_response=SupportsResponse.OPTIONAL,

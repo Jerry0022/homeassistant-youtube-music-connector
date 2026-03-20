@@ -103,6 +103,7 @@ class YoutubeMusicConnectorManager:
         self._shuffle_enabled = False
         self._repeat_mode = REPEAT_MODE_OFF
         self._playback_history: list[ResolvedPlayback] = []
+        self._group_targets: list[str] = []
 
     @property
     def name(self) -> str:
@@ -120,6 +121,10 @@ class YoutubeMusicConnectorManager:
     @property
     def target_entity_id(self) -> str:
         return self._target_entity_id
+
+    @property
+    def group_targets(self) -> list[str]:
+        return list(self._group_targets)
 
     @property
     def entity_id(self) -> str:
@@ -234,6 +239,7 @@ class YoutubeMusicConnectorManager:
             "repeat_mode": self._repeat_mode,
             "has_next_track": self.has_next_track,
             "has_previous_track": self.has_previous_track,
+            "group_targets": list(self._group_targets),
         }
         if self._current_resolved:
             attrs["resolved_stream"] = {
@@ -276,8 +282,42 @@ class YoutubeMusicConnectorManager:
                     blocking=True,
                 )
         self._target_entity_id = entity_id
+        if entity_id in self._group_targets:
+            self._group_targets.remove(entity_id)
         await self._async_rebind_target_listener()
         self.async_notify()
+
+    async def async_set_group_targets(self, targets: list[str]) -> dict[str, Any]:
+        self._group_targets = [t for t in targets if t != self._target_entity_id]
+        self.async_notify()
+        return {"group_targets": list(self._group_targets)}
+
+    async def _async_mirror_to_group(self, domain: str, service: str, data: dict[str, Any]) -> None:
+        if not self._group_targets:
+            return
+        tasks = []
+        for target in self._group_targets:
+            call_data = dict(data)
+            call_data["entity_id"] = target
+            tasks.append(
+                self.hass.services.async_call(domain, service, call_data, blocking=True)
+            )
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for target, result in zip(self._group_targets, results):
+            if isinstance(result, Exception):
+                _LOGGER.warning("Mirror %s.%s to %s failed: %s", domain, service, target, result)
+
+    async def _async_mirror_playback_to_group(self, resolved: ResolvedPlayback) -> None:
+        if not self._group_targets:
+            return
+        tasks = [
+            self._async_start_resolved_playback_on(resolved, target)
+            for target in self._group_targets
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for target, result in zip(self._group_targets, results):
+            if isinstance(result, Exception):
+                _LOGGER.warning("Mirror playback to %s failed: %s", target, result)
 
     def _should_pause_previous_target_on_switch(self, previous_target: str) -> bool:
         if not previous_target or previous_target != self._current_playback_target_entity_id:
@@ -717,6 +757,7 @@ class YoutubeMusicConnectorManager:
             "url": resolved.url,
             "proxy_url": resolved.proxy_url,
         }
+        await self._async_mirror_playback_to_group(resolved)
 
     def _playback_media_types_for(self, item_type: str) -> list[str]:
         primary = str(MEDIA_TYPE_MAP.get(item_type, "music"))
@@ -875,6 +916,7 @@ class YoutubeMusicConnectorManager:
         await asyncio.sleep(0.2)
         target_state = self.target_state
         if target_state != MediaPlayerState.PLAYING:
+            await self._async_mirror_to_group("media_player", "media_pause", {})
             self.async_notify()
             return
 
@@ -884,6 +926,7 @@ class YoutubeMusicConnectorManager:
             {"entity_id": self._target_entity_id},
             blocking=True,
         )
+        await self._async_mirror_to_group("media_player", "media_pause", {})
         self.async_notify()
 
     async def async_media_play(self) -> None:
@@ -914,6 +957,7 @@ class YoutubeMusicConnectorManager:
             {"entity_id": self._target_entity_id},
             blocking=True,
         )
+        await self._async_mirror_to_group("media_player", "media_play", {})
 
     async def async_media_stop(self) -> None:
         if self._target_entity_id:
@@ -923,6 +967,7 @@ class YoutubeMusicConnectorManager:
                 {"entity_id": self._target_entity_id},
                 blocking=True,
             )
+            await self._async_mirror_to_group("media_player", "media_stop", {})
 
     async def async_media_seek(self, position: float) -> None:
         if self._target_entity_id:

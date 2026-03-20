@@ -27,6 +27,7 @@ class YtmcPlayer extends HTMLElement {
     this._draftSeek = null;
     this._renderSig = "";
     this._recentTargets = []; // sorted by last selection, most recent first
+    this._selectedTargets = new Set(); // multi-select device chips
     this._showAllDevices = false;
     this._excludeDevices = [];
   }
@@ -118,11 +119,44 @@ class YtmcPlayer extends HTMLElement {
     return sorted;
   }
 
-  async _selectTarget(entityId) {
-    // Track selection order
+  _isTargetActive(tid) {
+    if (this._selectedTargets.size > 0) return this._selectedTargets.has(tid);
+    return tid === this._attrs.target_entity_id;
+  }
+
+  _syncGroupFromBackend() {
+    const backendGroup = this._attrs.group_targets || [];
+    const primary = this._attrs.target_entity_id;
+    if (this._selectedTargets.size === 0 && backendGroup.length > 0) {
+      if (primary) this._selectedTargets.add(primary);
+      backendGroup.forEach(t => this._selectedTargets.add(t));
+    }
+  }
+
+  async _toggleTarget(entityId) {
+    if (this._selectedTargets.size === 0) {
+      const current = this._attrs.target_entity_id;
+      if (current && current !== entityId) this._selectedTargets.add(current);
+      this._selectedTargets.add(entityId);
+    } else if (this._selectedTargets.has(entityId)) {
+      this._selectedTargets.delete(entityId);
+      if (this._selectedTargets.size === 0) {
+        await this._hass.callService("youtube_music_connector", "set_group_targets", { entity_id: this._entityId, group_targets: [] });
+        this._renderSig = "";
+        this._tryRender();
+        return;
+      }
+    } else {
+      this._selectedTargets.add(entityId);
+    }
     this._recentTargets = [entityId, ...this._recentTargets.filter(t => t !== entityId)];
-    this._showAllDevices = false;
-    await this._hass.callService("media_player", "select_source", { entity_id: this._entityId, source: entityId });
+    const targets = [...this._selectedTargets];
+    const primary = targets[0];
+    const group = targets.slice(1);
+    await this._hass.callService("media_player", "select_source", { entity_id: this._entityId, source: primary });
+    await this._hass.callService("youtube_music_connector", "set_group_targets", { entity_id: this._entityId, group_targets: group });
+    this._renderSig = "";
+    this._tryRender();
   }
   async _togglePlayPause() {
     await this._hass.callService("media_player", this._isPlaying ? "media_pause" : "media_play", { entity_id: this._entityId });
@@ -137,8 +171,28 @@ class YtmcPlayer extends HTMLElement {
     await this._hass.callService("youtube_music_connector", "set_repeat_mode", { entity_id: this._entityId, repeat_mode: order[(order.indexOf(cur) + 1) % order.length] });
   }
   async _setVolume(val) {
+    const targets = this._allActiveTargets();
+    for (const tid of targets) {
+      await this._hass.callService("media_player", "volume_set", { entity_id: tid, volume_level: val / 100 });
+    }
+  }
+
+  _allActiveTargets() {
+    if (this._selectedTargets.size > 0) return [...this._selectedTargets];
     const tid = this._attrs.target_entity_id;
-    if (tid) await this._hass.callService("media_player", "volume_set", { entity_id: tid, volume_level: val / 100 });
+    return tid ? [tid] : [];
+  }
+
+  _groupVolumePct() {
+    const targets = this._allActiveTargets();
+    if (targets.length === 0) return 50;
+    let maxVol = 0;
+    for (const tid of targets) {
+      const s = this._hass?.states?.[tid];
+      const v = s?.attributes?.volume_level;
+      if (typeof v === "number" && v > maxVol) maxVol = v;
+    }
+    return Math.round(maxVol * 100);
   }
   async _seekTo(pos) {
     const tid = this._attrs.target_entity_id;
@@ -152,7 +206,7 @@ class YtmcPlayer extends HTMLElement {
     const e = this._entity;
     if (!e) return "";
     const a = e.attributes || {};
-    return JSON.stringify([e.state, a.media_title, a.media_artist, a.media_image_url, a.target_entity_id, a.available_target_players, a.shuffle_enabled, a.repeat_mode, a.has_next_track, a.has_previous_track, a.autoplay_enabled, a.autoplay_queue_length]);
+    return JSON.stringify([e.state, a.media_title, a.media_artist, a.media_image_url, a.target_entity_id, a.available_target_players, a.shuffle_enabled, a.repeat_mode, a.has_next_track, a.has_previous_track, a.autoplay_enabled, a.autoplay_queue_length, a.group_targets, [...this._selectedTargets].sort().join()]);
   }
   _tryRender() { const s = this._sig(); if (s === this._renderSig) return; this._renderSig = s; this._render(); }
 
@@ -160,8 +214,10 @@ class YtmcPlayer extends HTMLElement {
   _render() {
     const entity = this._entity;
     if (!entity) { this.shadowRoot.innerHTML = ""; return; }
+    this._syncGroupFromBackend();
     const a = this._attrs;
     const state = this._state;
+    const isGroupMode = this._selectedTargets.size > 1;
     const title = a.media_title || a.current_item?.title || "";
     const artist = a.media_artist || a.current_item?.artist || "";
     const imageUrl = a.media_image_url || a.current_item?.image_url || "";
@@ -178,10 +234,10 @@ class YtmcPlayer extends HTMLElement {
     const pct = dur && pos != null ? Math.min((pos / dur) * 100, 100) : 0;
     const tid = a.target_entity_id;
     const target = tid ? this._hass?.states?.[tid] : null;
-    const supportsVolume = target && (parseInt(target.attributes?.supported_features || 0) & 4);
-    const supportsSeek = target && (parseInt(target.attributes?.supported_features || 0) & 16);
     const vol = target?.attributes?.volume_level;
-    const volPct = vol != null ? Math.round(vol * 100) : 50;
+    const supportsVolume = isGroupMode ? this._allActiveTargets().length > 0 : target && (parseInt(target.attributes?.supported_features || 0) & 4);
+    const supportsSeek = !isGroupMode && target && (parseInt(target.attributes?.supported_features || 0) & 16);
+    const volPct = isGroupMode ? this._groupVolumePct() : (vol != null ? Math.round(vol * 100) : 50);
     // Detect if target is playing something (even if not from this connector)
     const targetState = target?.state;
     const targetIsPlaying = targetState === "playing" || targetState === "paused";
@@ -231,7 +287,7 @@ class YtmcPlayer extends HTMLElement {
             </div>`}
           </div>` : ""}
 
-          ${(this._isActive || targetIsPlaying) && dur ? `
+          ${(this._isActive || targetIsPlaying) && dur && !isGroupMode ? `
           <div class="progress-row">
             <span class="pos-current">${this._fmtTime(pos)}</span>
             <div class="progress-track ${supportsSeek ? "" : "no-seek"}" ${supportsSeek ? 'data-action="seek"' : ""}>
@@ -262,7 +318,7 @@ class YtmcPlayer extends HTMLElement {
     return `
       <div class="device-chips">
         ${visible.map((s) => `
-          <button class="dev-chip ${s === activeTarget ? "active" : ""}" data-target="${this._esc(s)}">
+          <button class="dev-chip ${this._isTargetActive(s) ? "active" : ""}" data-target="${this._esc(s)}">
             <ha-icon icon="mdi:${s.includes("chromecast") || s.includes("tv") ? "television" : "speaker"}"></ha-icon>
             ${this._esc(this._friendlyName(s))}
           </button>
@@ -285,7 +341,7 @@ class YtmcPlayer extends HTMLElement {
 
   _bindEvents() {
     this.shadowRoot.querySelectorAll("[data-target]").forEach((btn) => {
-      btn.addEventListener("click", () => this._selectTarget(btn.dataset.target));
+      btn.addEventListener("click", () => this._toggleTarget(btn.dataset.target));
     });
     this.shadowRoot.querySelectorAll("[data-action]").forEach((el) => {
       const action = el.dataset.action;

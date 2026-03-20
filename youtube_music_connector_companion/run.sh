@@ -118,7 +118,7 @@ send_restart_notification() {
             break
         fi
         retries=$((retries + 1))
-        bashio::log.debug "Waiting for HA Core (attempt ${retries}/30, state: ${core_state:-unknown})"
+        bashio::log.info "Waiting for HA Core (attempt ${retries}/30, state: ${core_state:-unknown})"
         sleep 2
     done
 

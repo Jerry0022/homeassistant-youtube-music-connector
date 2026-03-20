@@ -53,15 +53,6 @@ class YtmcSearchPlay extends HTMLElement {
     return tid === fallback;
   }
 
-  _syncGroupFromBackend() {
-    const backendGroup = this._attrs.group_targets || [];
-    const primary = this._attrs.target_entity_id;
-    if (this._selectedTargets.size === 0 && backendGroup.length > 0) {
-      if (primary) this._selectedTargets.add(primary);
-      backendGroup.forEach(t => this._selectedTargets.add(t));
-    }
-  }
-
   _targetFriendly(tid) {
     if (!tid) return tid;
     const s = this._hass?.states?.[tid];
@@ -89,18 +80,15 @@ class YtmcSearchPlay extends HTMLElement {
   async _play(itemType, itemId) {
     const targets = this._activeTargets();
     if (targets.length === 0) return;
-    // First target: normal play (sets manager state, autoplay context)
+    const primary = targets[0];
+    const group = targets.slice(1);
+    // Sync device selection to backend only on play
+    await this._hass.callService("media_player", "select_source", { entity_id: this._entityId, source: primary });
+    await this._hass.callService("youtube_music_connector", "set_group_targets", { entity_id: this._entityId, group_targets: group });
+    // Play — manager mirrors to group automatically
     await this._hass.callService("youtube_music_connector", "play", {
       entity_id: this._entityId, item_type: itemType, item_id: itemId,
-      target_entity_id: targets[0],
     });
-    // Additional targets: play_on (stream only, no state change)
-    for (let i = 1; i < targets.length; i++) {
-      await this._hass.callService("youtube_music_connector", "play_on", {
-        entity_id: this._entityId, item_type: itemType, item_id: itemId,
-        target_entity_id: targets[i],
-      });
-    }
   }
 
   _activeTargets() {
@@ -110,28 +98,15 @@ class YtmcSearchPlay extends HTMLElement {
     return t ? [t] : [];
   }
 
-  async _toggleTarget(entityId) {
+  _toggleTarget(entityId) {
     if (this._selectedTargets.size === 0) {
-      const current = this._attrs.target_entity_id;
-      if (current && current !== entityId) this._selectedTargets.add(current);
       this._selectedTargets.add(entityId);
     } else if (this._selectedTargets.has(entityId)) {
       this._selectedTargets.delete(entityId);
-      if (this._selectedTargets.size === 0) {
-        await this._hass.callService("youtube_music_connector", "set_group_targets", { entity_id: this._entityId, group_targets: [] });
-        this._renderSig = "";
-        this._tryRender();
-        return;
-      }
     } else {
       this._selectedTargets.add(entityId);
     }
     this._recentTargets = [entityId, ...this._recentTargets.filter(t => t !== entityId)];
-    const targets = [...this._selectedTargets];
-    const primary = targets[0];
-    const group = targets.slice(1);
-    await this._hass.callService("media_player", "select_source", { entity_id: this._entityId, source: primary });
-    await this._hass.callService("youtube_music_connector", "set_group_targets", { entity_id: this._entityId, group_targets: group });
     this._renderSig = "";
     this._tryRender();
   }
@@ -184,7 +159,7 @@ class YtmcSearchPlay extends HTMLElement {
 
   _sig() {
     const a = this._attrs;
-    return JSON.stringify([a.target_entity_id, a.available_target_players, a.search_results?.length, a.search_query, a.search_type, a.autoplay_enabled, this._searchLoading, [...this._draft.filters].sort().join(), [...this._selectedTargets].sort().join(), a.group_targets]);
+    return JSON.stringify([a.target_entity_id, a.available_target_players, a.search_results?.length, a.search_query, a.search_type, a.autoplay_enabled, this._searchLoading, [...this._draft.filters].sort().join(), [...this._selectedTargets].sort().join()]);
   }
   _tryRender() { const s = this._sig(); if (s === this._renderSig) return; this._renderSig = s; this._render(); }
 
@@ -192,7 +167,6 @@ class YtmcSearchPlay extends HTMLElement {
   _render() {
     const entity = this._entity;
     if (!entity) { this.shadowRoot.innerHTML = ""; return; }
-    this._syncGroupFromBackend();
     const a = this._attrs;
     const targets = (a.available_target_players || []).filter(t => !this._excludeDevices.includes(t));
     const activeTarget = a.target_entity_id || "";

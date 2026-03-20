@@ -28,17 +28,21 @@ class YtmcPlayer extends HTMLElement {
     this._renderSig = "";
     this._recentTargets = []; // sorted by last selection, most recent first
     this._showAllDevices = false;
+    this._excludeDevices = [];
   }
 
   /* ── Lovelace card interface ── */
   setConfig(config) {
     this._config = config;
     if (config.entity) this.entityId = config.entity;
+    if (Array.isArray(config.exclude_devices)) this._excludeDevices = config.exclude_devices;
   }
   getCardSize() { return 4; }
 
   set entityId(val) { this._entityId = val; this._tryRender(); }
   get entityId() { return this._entityId; }
+  set excludeDevices(val) { this._excludeDevices = Array.isArray(val) ? val : []; this._tryRender(); }
+  get excludeDevices() { return this._excludeDevices; }
   set hass(hass) { this._hass = hass; this._syncProgressTicker(); this._tryRender(); }
   get hass() { return this._hass; }
   disconnectedCallback() { this._clearTicker(); }
@@ -185,7 +189,7 @@ class YtmcPlayer extends HTMLElement {
     const hasTrack = !!title;
 
     // Device selector options
-    const sources = a.available_target_players || [];
+    const sources = (a.available_target_players || []).filter(s => !this._excludeDevices.includes(s));
 
     this.shadowRoot.innerHTML = `
       <style>${this._css()}</style>

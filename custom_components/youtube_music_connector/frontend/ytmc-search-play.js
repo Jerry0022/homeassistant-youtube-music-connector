@@ -283,8 +283,10 @@ class YtmcSearchPlay extends HTMLElement {
         const key = btn.dataset.filter;
         if (this._draft.filters.has(key)) this._draft.filters.delete(key);
         else this._draft.filters.add(key);
+        this._draft.limit = 5;
         this._renderSig = "";
         this._tryRender();
+        if (this._draft.query.trim()) this._search();
       });
     });
     const searchBtn = root.querySelector("[data-action='search']");

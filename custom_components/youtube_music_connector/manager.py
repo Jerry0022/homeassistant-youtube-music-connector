@@ -163,11 +163,19 @@ class YoutubeMusicConnectorManager:
     def media_title(self) -> str | None:
         if not self._current_item:
             return None
-        return self._current_item.get("title") or self._current_item.get("playlist_name") or self._current_item.get("artist")
+        item_type = self._current_item.get("type")
+        if item_type == ITEM_TYPE_PLAYLIST:
+            return self._current_item.get("playlist_name") or self._current_item.get("artist")
+        if item_type == ITEM_TYPE_ARTIST:
+            return self._current_item.get("artist")
+        return self._current_item.get("title") or self._current_item.get("artist")
 
     @property
     def media_artist(self) -> str | None:
         if not self._current_item:
+            return None
+        item_type = self._current_item.get("type")
+        if item_type == ITEM_TYPE_ARTIST:
             return None
         return self._current_item.get("artist") or None
 
@@ -790,7 +798,11 @@ class YoutubeMusicConnectorManager:
             track = self._pick_initial_track(tracks)
             playable_id = track.get("videoId", "")
             title = playlist.get("title", title)
-            artist = playlist.get("author", artist)
+            raw_author = playlist.get("author", artist)
+            if isinstance(raw_author, dict):
+                artist = raw_author.get("name", "") or artist
+            else:
+                artist = str(raw_author) if raw_author else artist
             image_url = self._extract_thumbnail(playlist) or image_url
             public_url = self._build_playlist_url(playlist_id)
         elif item_type == ITEM_TYPE_ARTIST:

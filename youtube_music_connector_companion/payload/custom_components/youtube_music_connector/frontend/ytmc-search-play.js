@@ -61,7 +61,6 @@ class YtmcSearchPlay extends HTMLElement {
 
   /* ── service calls ── */
   async _search() {
-    if (!this._draft.query.trim()) return;
     this._searchLoading = true;
     this._render();
     try {
@@ -156,7 +155,7 @@ class YtmcSearchPlay extends HTMLElement {
 
   _sig() {
     const a = this._attrs;
-    return JSON.stringify([a.target_entity_id, a.available_target_players, a.search_results?.length, a.search_query, a.search_type, a.autoplay_enabled, this._searchLoading, [...this._draft.filters].sort().join(), [...this._selectedTargets].sort().join()]);
+    return JSON.stringify([a.target_entity_id, a.available_target_players, a.search_results?.length, a.search_query, a.search_type, a.autoplay_enabled, this._searchLoading, [...this._draft.filters].sort().join(), [...this._selectedTargets].sort().join(), a.recent_items_count]);
   }
   _tryRender() { const s = this._sig(); if (s === this._renderSig) return; this._renderSig = s; this._render(); }
 
@@ -218,7 +217,7 @@ class YtmcSearchPlay extends HTMLElement {
             </div>
           ` : visibleResults.length === 0 ? `
             <div class="state-msg muted">
-              ${a.search_query ? "Keine Ergebnisse" : "Suchbegriff eingeben"}
+              ${a.search_query ? "Keine Ergebnisse" : "Suchbegriff eingeben oder Enter f\u00FCr zuletzt abgespielt"}
             </div>
           ` : `
             <div class="results-list">
@@ -282,7 +281,7 @@ class YtmcSearchPlay extends HTMLElement {
         this._draft.limit = 5;
         this._renderSig = "";
         this._tryRender();
-        if (this._draft.query.trim()) this._search();
+        this._search();
       });
     });
     const searchBtn = root.querySelector("[data-action='search']");

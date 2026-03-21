@@ -187,6 +187,16 @@ class YoutubeMusicConnectorPanel extends HTMLElement {
           border-radius: 4px;
           font-size: 0.82rem;
         }
+        .auth-card ol kbd {
+          display: inline-block;
+          background: rgba(255,255,255,0.1);
+          border: 1px solid rgba(255,255,255,0.2);
+          border-radius: 4px;
+          padding: 1px 6px;
+          font-family: monospace;
+          font-size: 0.82rem;
+          box-shadow: 0 1px 0 rgba(255,255,255,0.1);
+        }
         .auth-card textarea {
           width: 100%;
           min-height: 120px;
@@ -275,13 +285,15 @@ class YoutubeMusicConnectorPanel extends HTMLElement {
             Google session cookies and request headers stay inside the browser context. The robust approach is: capture one authenticated request in DevTools, paste it here, let the app extract and store the valid browser.json automatically.
           </div>
           <ol>
-            <li>Open <code>music.youtube.com</code> and log in.</li>
-            <li>In DevTools, open a browse or search request under <code>youtubei/v1</code>.</li>
-            <li>Copy either <code>Copy as fetch</code> or the raw <code>Request Headers</code>.</li>
+            <li>Open <a href="https://music.youtube.com" target="_blank" rel="noopener" style="color:var(--ytmc-accent)">music.youtube.com</a> and log in.</li>
+            <li>Open DevTools (<kbd>F12</kbd>), switch to the <strong>Network</strong> tab.</li>
+            <li>On the YouTube Music page, browse or search something so requests appear.</li>
+            <li>Filter by <code>youtubei/v1</code> and click any request (e.g. <code>browse</code> or <code>search</code>).</li>
+            <li>In Chromium: go to the <strong>Headers</strong> tab \u2192 <strong>Request Headers</strong> section. Right-click the request and choose <code>Copy as fetch</code>, or manually copy the raw <code>Request Headers</code>.</li>
             <li>Paste the text below and click <strong>Extract and Save</strong>.</li>
             <li>Use the saved <code>/config/.storage/...json</code> path in the integration config or reconfigure flow.</li>
           </ol>
-          <textarea id="import_text" placeholder="Paste Copy as fetch or raw Request Headers here"></textarea>
+          <textarea id="import_text" placeholder="Paste Copy as fetch or raw Request Headers here\n\nExample (raw Request Headers):\n\nAccept: */*\nAccept-Language: de,en-US;q=0.9,en;q=0.8\nAuthorization: SAPISIDHASH 1234567890_abc...\nContent-Type: application/json\nCookie: HSID=AaBbCc...; SSID=DdEeFf...; SID=GgHhIi...; SAPISID=JjKkLl...; __Secure-1PSID=MmNnOo...; __Secure-3PSID=PpQqRr...; LOGIN_INFO=...\nOrigin: https://music.youtube.com\nReferer: https://music.youtube.com/\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) ...\nX-Goog-AuthUser: 0\nX-Goog-Visitor-Id: CgtABC123..."></textarea>
           <div class="file-row">
             <input type="text" id="file_name" value="${this._fileName}">
             <span class="hint">Saved in <code>/config/.storage/</code></span>

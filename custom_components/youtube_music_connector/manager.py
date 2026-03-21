@@ -103,6 +103,11 @@ class YoutubeMusicConnectorManager:
         # Per-device sessions, lazily created via get_or_create_session().
         self._sessions: dict[str, DeviceSession] = {}
 
+        # Recently played cache — max 5 per type, sorted by most recent first.
+        self._recent_songs: list[dict[str, Any]] = []
+        self._recent_playlists: list[dict[str, Any]] = []
+        self._recent_artists: list[dict[str, Any]] = []
+
     # ------------------------------------------------------------------
     # Session management
     # ------------------------------------------------------------------
@@ -278,6 +283,8 @@ class YoutubeMusicConnectorManager:
             "group_targets": list(self._selected_device_ids[1:]),
             # Active sessions summary
             "active_sessions": {eid: s.summary_dict() for eid, s in self._sessions.items()},
+            # Recently played counts per type
+            "recent_items_count": len(self._recent_songs) + len(self._recent_playlists) + len(self._recent_artists),
         }
         if session and session._current_resolved:
             attrs["resolved_stream"] = {
@@ -486,6 +493,12 @@ class YoutubeMusicConnectorManager:
                     if isinstance(r, Exception):
                         _LOGGER.warning("Mirror playback to %s failed: %s", d, r)
             self._last_error = ""
+            # Record to recently played cache after successful playback
+            if session._current_resolved:
+                try:
+                    self._record_recent_play(item_type, item_id, session._current_resolved)
+                except Exception:
+                    pass  # Never let cache recording break playback
             return result
         except Exception as err:
             if session:
@@ -571,6 +584,62 @@ class YoutubeMusicConnectorManager:
             return self._api
 
     # ------------------------------------------------------------------
+    # Recently played cache
+    # ------------------------------------------------------------------
+
+    def _record_recent_play(self, item_type: str, item_id: str, resolved: ResolvedPlayback) -> None:
+        """Record a played item in the per-type recent history (max 5 each)."""
+        import time
+        entry: dict[str, Any] = {
+            "type": item_type,
+            "id": item_id,
+            "title": resolved.title,
+            "artist": resolved.artist,
+            "playlist_name": "",
+            "image_url": resolved.image_url,
+            "url": resolved.url,
+            "played_at": time.time(),
+        }
+        # Enrich with search index data if available (e.g. playlist_name for playlists)
+        index_entry = self._search_index.get((item_type, item_id))
+        if index_entry:
+            entry["playlist_name"] = index_entry.get("playlist_name", "")
+            if not entry["title"] and index_entry.get("title"):
+                entry["title"] = index_entry["title"]
+            if not entry["artist"] and index_entry.get("artist"):
+                entry["artist"] = index_entry["artist"]
+            if not entry["image_url"] and index_entry.get("image_url"):
+                entry["image_url"] = index_entry["image_url"]
+
+        if item_type == ITEM_TYPE_SONG:
+            target_list = self._recent_songs
+        elif item_type == ITEM_TYPE_PLAYLIST:
+            target_list = self._recent_playlists
+        elif item_type == ITEM_TYPE_ARTIST:
+            target_list = self._recent_artists
+        else:
+            return
+
+        # Remove duplicate by id, then prepend
+        target_list[:] = [e for e in target_list if e.get("id") != item_id]
+        target_list.insert(0, entry)
+        # Trim to max 5
+        del target_list[5:]
+
+    def get_recent_items(self, filter_type: str | None = None, limit: int = 5, offset: int = 0) -> list[dict[str, Any]]:
+        """Return recently played items, optionally filtered by type."""
+        if filter_type in (SEARCH_TYPE_SONGS, ITEM_TYPE_SONG):
+            return self._recent_songs[offset: offset + limit]
+        if filter_type in (SEARCH_TYPE_ARTISTS, ITEM_TYPE_ARTIST):
+            return self._recent_artists[offset: offset + limit]
+        if filter_type in (SEARCH_TYPE_PLAYLISTS, ITEM_TYPE_PLAYLIST):
+            return self._recent_playlists[offset: offset + limit]
+        # Merge all three lists, sort by played_at descending, paginate
+        merged = self._recent_songs + self._recent_playlists + self._recent_artists
+        merged.sort(key=lambda e: e.get("played_at", 0), reverse=True)
+        return merged[offset: offset + limit]
+
+    # ------------------------------------------------------------------
     # Search
     # ------------------------------------------------------------------
 
@@ -587,6 +656,11 @@ class YoutubeMusicConnectorManager:
         self._last_error = ""
 
         if not query:
+            # Return recently played items instead of an empty result set
+            recent = self.get_recent_items(filter_type=search_type, limit=limit, offset=0)
+            payload[ATTR_RESULTS] = recent
+            payload["count"] = len(recent)
+            payload["source"] = "recent"
             self._last_search_payload = payload
             self.async_notify()
             return payload

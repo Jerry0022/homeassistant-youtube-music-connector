@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.2 — 2026-03-21
+
+### Fixed
+- **Volume targeting wrong device after restart**: First device click now replaces the synced default selection instead of adding to it, preventing stale devices from receiving volume commands.
+- **Volume sent to devices without volume support**: Added `supported_features` check (bit 4) to skip devices that don't support `volume_set`.
+- **Search enabled without target device**: Search input, filter tags, and search button are now disabled when no target device is selected; results area shows a prompt to select a device first.
+
 ## 0.7.1 — 2026-03-21
 
 ### Added

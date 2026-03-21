@@ -31,6 +31,8 @@ class YtmcPlayer extends HTMLElement {
     this._showAllDevices = false;
     this._excludeDevices = [];
     this._lastToggleTime = 0;
+    this._lastSyncKey = "";
+    this._userHasToggled = false;
   }
 
   /* ── Lovelace card interface ── */
@@ -131,14 +133,20 @@ class YtmcPlayer extends HTMLElement {
     // Skip sync briefly after user toggle to avoid visual flicker
     if (this._lastToggleTime && Date.now() - this._lastToggleTime < 2000) return;
     const backendSelected = this._attrs.selected_devices || [];
-    this._selectedTargets = new Set(backendSelected);
+    const key = JSON.stringify(backendSelected);
+    if (key !== this._lastSyncKey) {
+      this._selectedTargets = new Set(backendSelected);
+      this._lastSyncKey = key;
+      this._userHasToggled = false;
+    }
   }
 
   async _toggleTarget(entityId) {
     this._lastToggleTime = Date.now();
-    if (this._selectedTargets.size === 0) {
-      const current = this._attrs.target_entity_id;
-      if (current && current !== entityId) this._selectedTargets.add(current);
+    if (!this._userHasToggled) {
+      // First explicit interaction: switch to this device only
+      this._userHasToggled = true;
+      this._selectedTargets.clear();
       this._selectedTargets.add(entityId);
     } else if (this._selectedTargets.has(entityId)) {
       this._selectedTargets.delete(entityId);
@@ -167,9 +175,11 @@ class YtmcPlayer extends HTMLElement {
     const targets = this._allActiveTargets();
     const promises = targets.map(async (tid) => {
       const state = this._hass?.states?.[tid];
+      // Skip devices that don't support volume_set (bit 4 = SUPPORT_VOLUME_SET)
+      const features = parseInt(state?.attributes?.supported_features || 0);
+      if (!(features & 4)) return;
       if (state?.state === "off" || state?.state === "standby") {
         await this._hass.callService("media_player", "turn_on", { entity_id: tid });
-        // Wait for device to come online
         await new Promise(r => setTimeout(r, 3000));
       }
       await this._hass.callService("media_player", "volume_set", { entity_id: tid, volume_level: val / 100 });

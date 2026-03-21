@@ -26,6 +26,8 @@ class YtmcSearchPlay extends HTMLElement {
     this._interacting = false;
     this._excludeDevices = [];
     this._lastToggleTime = 0;
+    this._lastSyncKey = "";
+    this._userHasToggled = false;
   }
 
   /* ── Lovelace card interface ── */
@@ -97,7 +99,10 @@ class YtmcSearchPlay extends HTMLElement {
 
   _toggleTarget(entityId) {
     this._lastToggleTime = Date.now();
-    if (this._selectedTargets.size === 0) {
+    if (!this._userHasToggled) {
+      // First explicit interaction: switch to this device only
+      this._userHasToggled = true;
+      this._selectedTargets.clear();
       this._selectedTargets.add(entityId);
     } else if (this._selectedTargets.has(entityId)) {
       this._selectedTargets.delete(entityId);
@@ -113,7 +118,12 @@ class YtmcSearchPlay extends HTMLElement {
   _syncSelectedFromBackend() {
     if (this._lastToggleTime && Date.now() - this._lastToggleTime < 2000) return;
     const backendSelected = this._attrs.selected_devices || [];
-    this._selectedTargets = new Set(backendSelected);
+    const key = JSON.stringify(backendSelected);
+    if (key !== this._lastSyncKey) {
+      this._selectedTargets = new Set(backendSelected);
+      this._lastSyncKey = key;
+      this._userHasToggled = false;
+    }
   }
 
   _sortedSources(sources, activeTarget) {
@@ -190,6 +200,7 @@ class YtmcSearchPlay extends HTMLElement {
       if (activeFilters.has("playlists") && r.type === "playlist") return true;
       return false;
     });
+    const hasTargets = this._activeTargets().length > 0;
 
     this.shadowRoot.innerHTML = `
       <style>${this._css()}</style>
@@ -204,15 +215,15 @@ class YtmcSearchPlay extends HTMLElement {
           <div class="search-bar">
             <div class="search-icon"><ha-icon icon="mdi:magnify"></ha-icon></div>
             <input type="text" class="search-input" placeholder="Song, Artist oder Playlist suchen..."
-                   value="${this._esc(this._draft.query)}" />
+                   value="${this._esc(this._draft.query)}" ${hasTargets ? "" : "disabled"} />
             <div class="filter-tags">
               ${filterTypes.map((f) => `
-                <button class="filter-tag ${activeFilters.has(f.key) ? "active" : ""}" data-filter="${f.key}">
+                <button class="filter-tag ${activeFilters.has(f.key) ? "active" : ""}" data-filter="${f.key}" ${hasTargets ? "" : "disabled"}>
                   ${f.label}
                 </button>
               `).join("")}
             </div>
-            <button class="search-btn" data-action="search" title="Suchen">
+            <button class="search-btn ${hasTargets ? "" : "disabled"}" data-action="search" title="Suchen" ${hasTargets ? "" : "disabled"}>
               <ha-icon icon="mdi:arrow-right"></ha-icon>
             </button>
           </div>
@@ -220,7 +231,11 @@ class YtmcSearchPlay extends HTMLElement {
 
         <!-- Results -->
         <div class="results-section">
-          ${this._searchLoading ? `
+          ${!hasTargets ? `
+            <div class="state-msg muted">
+              Bitte Zielger\u00E4t ausw\u00E4hlen um zu suchen und abzuspielen
+            </div>
+          ` : this._searchLoading ? `
             <div class="state-msg">
               <ha-icon icon="mdi:loading" class="spin"></ha-icon>
               <span>Suche l\u00E4uft...</span>
@@ -281,7 +296,7 @@ class YtmcSearchPlay extends HTMLElement {
       input.addEventListener("focus", () => { this._interacting = true; });
       input.addEventListener("blur", () => { this._interacting = false; });
       input.addEventListener("input", (e) => { this._draft.query = e.target.value; });
-      input.addEventListener("keydown", (e) => { if (e.key === "Enter") { this._draft.limit = 5; this._search(); } });
+      input.addEventListener("keydown", (e) => { if (e.key === "Enter" && this._activeTargets().length > 0) { this._draft.limit = 5; this._search(); } });
     }
     root.querySelectorAll("[data-filter]").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -469,9 +484,14 @@ class YtmcSearchPlay extends HTMLElement {
         transition: all 0.15s;
         box-shadow: 0 2px 10px rgba(74,158,255,0.3);
       }
-      .search-btn:hover { background: var(--_accent-active); transform: scale(1.05); box-shadow: 0 4px 16px rgba(74,158,255,0.4); }
-      .search-btn:active { transform: scale(0.94); }
+      .search-btn:hover:not(.disabled) { background: var(--_accent-active); transform: scale(1.05); box-shadow: 0 4px 16px rgba(74,158,255,0.4); }
+      .search-btn:active:not(.disabled) { transform: scale(0.94); }
+      .search-btn.disabled { opacity: 0.35; cursor: default; pointer-events: none; }
       .search-btn ha-icon { --mdc-icon-size: 24px; }
+
+      /* disabled states for no-target */
+      .search-input:disabled { opacity: 0.4; cursor: default; }
+      .filter-tag:disabled { opacity: 0.35; cursor: default; pointer-events: none; }
 
       /* ── results ── */
       .results-section {

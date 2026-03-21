@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 from pathlib import Path
+from datetime import timedelta
 import json
 
 import voluptuous as vol
@@ -13,7 +14,11 @@ from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import config_validation as cv, issue_registry as ir
+from homeassistant.helpers.event import async_track_time_interval
+
+# Re-export so HA can discover the repair flow handler
+from .repairs import async_create_fix_flow  # noqa: F401
 
 from .auth_import import DEFAULT_IMPORT_FILENAME, parse_browser_auth_input, write_browser_auth_file
 from .const import (
@@ -61,41 +66,58 @@ INSTALL_STATE_PATH = Path("/config/.storage/youtube_music_connector_installer.js
 RESTART_MARKER_PATH = Path("/config/.storage/youtube_music_connector_restart_needed.json")
 
 
+RESTART_NOTIFICATION_ID = "youtube_music_connector_restart_required"
+_MARKER_CHECK_INTERVAL = timedelta(seconds=60)
+
+
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     _log_runtime_diagnostics()
     hass.data.setdefault(DOMAIN, {})
-    _check_restart_marker(hass)
     return True
 
 
-def _check_restart_marker(hass: HomeAssistant) -> None:
-    """Create persistent notification from add-on restart marker file if present."""
+def _consume_restart_marker() -> dict | None:
+    """Read and delete the restart marker file if it exists. Returns marker data or None."""
     try:
         if not RESTART_MARKER_PATH.is_file():
-            return
+            return None
         data = json.loads(RESTART_MARKER_PATH.read_text(encoding="utf-8"))
         RESTART_MARKER_PATH.unlink(missing_ok=True)
-        hass.components.persistent_notification.async_create(
-            message=data.get("message", "The integration was updated. Please restart Home Assistant."),
-            title=data.get("title", "YouTube Music Connector updated"),
-            notification_id=data.get("notification_id", RESTART_NOTIFICATION_ID),
-        )
-        _LOGGER.info("Created restart notification from add-on marker file")
+        return data
     except Exception:
-        _LOGGER.debug("No restart marker to process", exc_info=True)
+        _LOGGER.debug("Failed to read restart marker", exc_info=True)
+        return None
 
 
-RESTART_NOTIFICATION_ID = "youtube_music_connector_restart_required"
+def _create_restart_repair_issue(hass: HomeAssistant, version: str) -> None:
+    """Create a Repairs issue prompting the user to restart HA."""
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        "restart_required",
+        is_fixable=True,
+        is_persistent=True,
+        severity=ir.IssueSeverity.WARNING,
+        translation_key="restart_required",
+        translation_placeholders={"version": version},
+    )
+    _LOGGER.info("Created repair issue: restart required for v%s", version)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry) -> bool:
     _log_runtime_diagnostics()
+
+    # Dismiss stale restart prompts — if this code is loading, the restart already happened
+    ir.async_delete_issue(hass, DOMAIN, "restart_required")
     await hass.services.async_call(
         "persistent_notification",
         "dismiss",
         {"notification_id": RESTART_NOTIFICATION_ID},
         blocking=False,
     )
+    # Also consume any leftover marker from a completed restart
+    _consume_restart_marker()
+
     manager = YoutubeMusicConnectorManager(hass, entry)
     domain_data = hass.data.setdefault(DOMAIN, {})
     domain_data[entry.entry_id] = manager
@@ -110,6 +132,16 @@ async def async_setup_entry(hass: HomeAssistant, entry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
     await _async_register_services(hass)
+
+    # Watch for add-on update marker file while HA is running
+    async def _poll_restart_marker(_now):
+        data = _consume_restart_marker()
+        if data is not None:
+            _create_restart_repair_issue(hass, data.get("version", "unknown"))
+
+    unsub = async_track_time_interval(hass, _poll_restart_marker, _MARKER_CHECK_INTERVAL)
+    entry.async_on_unload(unsub)
+
     return True
 
 

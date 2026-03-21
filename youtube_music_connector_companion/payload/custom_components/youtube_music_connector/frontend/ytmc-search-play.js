@@ -25,6 +25,7 @@ class YtmcSearchPlay extends HTMLElement {
     this._searchLoading = false;
     this._interacting = false;
     this._excludeDevices = [];
+    this._lastToggleTime = 0;
   }
 
   /* ── Lovelace card interface ── */
@@ -95,6 +96,7 @@ class YtmcSearchPlay extends HTMLElement {
   }
 
   _toggleTarget(entityId) {
+    this._lastToggleTime = Date.now();
     if (this._selectedTargets.size === 0) {
       this._selectedTargets.add(entityId);
     } else if (this._selectedTargets.has(entityId)) {
@@ -103,8 +105,15 @@ class YtmcSearchPlay extends HTMLElement {
       this._selectedTargets.add(entityId);
     }
     this._recentTargets = [entityId, ...this._recentTargets.filter(t => t !== entityId)];
+    this._hass.callService("youtube_music_connector", "set_selected_devices", { entity_id: this._entityId, selected_devices: [...this._selectedTargets] });
     this._renderSig = "";
     this._tryRender();
+  }
+
+  _syncSelectedFromBackend() {
+    if (this._lastToggleTime && Date.now() - this._lastToggleTime < 2000) return;
+    const backendSelected = this._attrs.selected_devices || [];
+    this._selectedTargets = new Set(backendSelected);
   }
 
   _sortedSources(sources, activeTarget) {
@@ -155,7 +164,7 @@ class YtmcSearchPlay extends HTMLElement {
 
   _sig() {
     const a = this._attrs;
-    return JSON.stringify([a.target_entity_id, a.available_target_players, a.search_results?.length, a.search_query, a.search_type, a.autoplay_enabled, this._searchLoading, [...this._draft.filters].sort().join(), [...this._selectedTargets].sort().join(), a.recent_items_count]);
+    return JSON.stringify([a.target_entity_id, a.available_target_players, a.search_results?.length, a.search_query, a.search_type, a.autoplay_enabled, this._searchLoading, [...this._draft.filters].sort().join(), a.selected_devices, a.recent_items_count]);
   }
   _tryRender() { const s = this._sig(); if (s === this._renderSig) return; this._renderSig = s; this._render(); }
 
@@ -163,6 +172,7 @@ class YtmcSearchPlay extends HTMLElement {
   _render() {
     const entity = this._entity;
     if (!entity) { this.shadowRoot.innerHTML = ""; return; }
+    this._syncSelectedFromBackend();
     const a = this._attrs;
     const targets = (a.available_target_players || []).filter(t => !this._excludeDevices.includes(t));
     const activeTarget = a.target_entity_id || "";

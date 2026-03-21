@@ -30,6 +30,7 @@ class YtmcPlayer extends HTMLElement {
     this._selectedTargets = new Set(); // multi-select device chips
     this._showAllDevices = false;
     this._excludeDevices = [];
+    this._lastToggleTime = 0;
   }
 
   /* ── Lovelace card interface ── */
@@ -127,13 +128,14 @@ class YtmcPlayer extends HTMLElement {
   }
 
   _syncSelectedFromBackend() {
+    // Skip sync briefly after user toggle to avoid visual flicker
+    if (this._lastToggleTime && Date.now() - this._lastToggleTime < 2000) return;
     const backendSelected = this._attrs.selected_devices || [];
-    if (this._selectedTargets.size === 0 && backendSelected.length > 0) {
-      backendSelected.forEach(t => this._selectedTargets.add(t));
-    }
+    this._selectedTargets = new Set(backendSelected);
   }
 
   async _toggleTarget(entityId) {
+    this._lastToggleTime = Date.now();
     if (this._selectedTargets.size === 0) {
       const current = this._attrs.target_entity_id;
       if (current && current !== entityId) this._selectedTargets.add(current);
@@ -163,9 +165,16 @@ class YtmcPlayer extends HTMLElement {
   }
   async _setVolume(val) {
     const targets = this._allActiveTargets();
-    for (const tid of targets) {
+    const promises = targets.map(async (tid) => {
+      const state = this._hass?.states?.[tid];
+      if (state?.state === "off" || state?.state === "standby") {
+        await this._hass.callService("media_player", "turn_on", { entity_id: tid });
+        // Wait for device to come online
+        await new Promise(r => setTimeout(r, 3000));
+      }
       await this._hass.callService("media_player", "volume_set", { entity_id: tid, volume_level: val / 100 });
-    }
+    });
+    await Promise.all(promises);
   }
 
   _allActiveTargets() {
@@ -203,10 +212,11 @@ class YtmcPlayer extends HTMLElement {
     const tVol = t?.attributes?.volume_level;
     const tDur = t?.attributes?.media_duration;
     const tPosUp = t?.attributes?.media_position_updated_at;
-    const groupVols = this._selectedTargets.size > 1
-      ? [...this._selectedTargets].map(id => this._hass?.states?.[id]?.attributes?.volume_level).join()
+    const selectedDevices = a.selected_devices || [];
+    const groupVols = selectedDevices.length > 1
+      ? selectedDevices.map(id => this._hass?.states?.[id]?.attributes?.volume_level).join()
       : "";
-    return JSON.stringify([e.state, a.media_title, a.media_artist, a.media_image_url, tid, a.available_target_players, a.shuffle_enabled, a.repeat_mode, a.has_next_track, a.has_previous_track, a.autoplay_enabled, a.autoplay_queue_length, a.selected_devices, [...this._selectedTargets].sort().join(), tState, tVol, tDur, tPosUp, groupVols]);
+    return JSON.stringify([e.state, a.media_title, a.media_artist, a.media_image_url, tid, a.available_target_players, a.shuffle_enabled, a.repeat_mode, a.has_next_track, a.has_previous_track, a.autoplay_enabled, a.autoplay_queue_length, a.selected_devices, tState, tVol, tDur, tPosUp, groupVols]);
   }
   _tryRender() { const s = this._sig(); if (s === this._renderSig) return; this._renderSig = s; this._render(); }
 
@@ -220,7 +230,7 @@ class YtmcPlayer extends HTMLElement {
     const isGroupMode = this._selectedTargets.size > 1;
     const title = a.media_title || a.current_item?.title || "";
     const artist = a.media_artist || a.current_item?.artist || "";
-    const imageUrl = a.media_image_url || a.current_item?.image_url || "";
+    const imageUrl = a.media_image_url || a.entity_picture || a.current_item?.image_url || "";
     const targetName = this._targetFriendlyName();
     const autoplayOn = !!a.autoplay_enabled;
     const shuffleOn = !!a.shuffle_enabled;
@@ -269,21 +279,22 @@ class YtmcPlayer extends HTMLElement {
             <div class="track-subtitle">${this._esc(artist) || "\u00A0"}</div>
           </div>` : ""}
 
-          ${hasTrack || (!hasTrack && targetIsPlaying) ? `
+          ${hasTrack || targetIsPlaying || this._selectedTargets.size > 0 ? `
           <div class="controls-row">
             ${hasTrack ? `
             <div class="transport">
-              ${hasPrev ? `<button class="transport-btn" data-action="prev" title="Previous"><ha-icon icon="mdi:skip-previous"></ha-icon></button>` : ""}
+              <button class="transport-btn ${hasPrev ? '' : 'disabled'}" data-action="prev" title="Previous"><ha-icon icon="mdi:skip-previous"></ha-icon></button>
               <button class="transport-btn play-btn" data-action="playpause" title="${this._isPlaying ? "Pause" : "Play"}">
                 <ha-icon icon="${this._isPlaying ? "mdi:pause" : "mdi:play"}"></ha-icon>
               </button>
-              ${hasNext ? `<button class="transport-btn" data-action="next" title="Next"><ha-icon icon="mdi:skip-next"></ha-icon></button>` : ""}
+              <button class="transport-btn ${hasNext ? '' : 'disabled'}" data-action="next" title="Next"><ha-icon icon="mdi:skip-next"></ha-icon></button>
             </div>` : `
             <div class="transport">
+              <button class="transport-btn ${hasPrev ? '' : 'disabled'}" data-action="prev" title="Previous"><ha-icon icon="mdi:skip-previous"></ha-icon></button>
               <button class="transport-btn play-btn" data-action="playpause" title="${targetState === "playing" ? "Pause" : "Play"}">
                 <ha-icon icon="${targetState === "playing" ? "mdi:pause" : "mdi:play"}"></ha-icon>
               </button>
-              ${hasNext ? `<button class="transport-btn" data-action="next" title="Next"><ha-icon icon="mdi:skip-next"></ha-icon></button>` : ""}
+              <button class="transport-btn ${hasNext ? '' : 'disabled'}" data-action="next" title="Next"><ha-icon icon="mdi:skip-next"></ha-icon></button>
             </div>`}
           </div>` : ""}
 
@@ -526,6 +537,11 @@ class YtmcPlayer extends HTMLElement {
         border-color: rgba(255,255,255,0.12);
       }
       .transport-btn ha-icon { --mdc-icon-size: 24px; }
+      .transport-btn.disabled {
+        opacity: 0.3;
+        pointer-events: none;
+        cursor: default;
+      }
 
       .play-btn {
         width: 54px; height: 54px;

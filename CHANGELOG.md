@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.7.1 — 2026-03-21
+
+### Added
+- **Restart via Repairs system**: After add-on update, a repair issue appears in Settings > System > Repairs with a one-click restart button (replaces persistent notification approach).
+- **Device auto-power-on**: Playing on an off/standby device now turns it on automatically (up to 15 s wait) before starting playback.
+- **Prev/next buttons always visible**: Transport controls now show skip-previous and skip-next buttons at all times (disabled state when no history/queue).
+
+### Fixed
+- **Volume targeting wrong device**: Player and search cards now always sync device selection from backend state, preventing stale local selections after restart or cross-card interactions.
+- **Search-play device selection not reflected in player**: Both cards now share device state via backend `selected_devices` attribute with 2 s debounce after user interaction.
+- **Multi-device play only playing on one device**: All selected devices are now turned on in parallel, stream resolved once, then played on all ready devices simultaneously.
+- **Changing device selection stopped existing playback**: Selecting or deselecting devices no longer auto-pauses running streams; only explicit pause stops playback.
+- **Missing album art in player**: Added `entity_picture` fallback for image URL resolution.
+- **Search-play toggle not syncing immediately**: Device chip toggles in search now call `set_selected_devices` instantly (not only on play).
+- **Add-on restart notification retry loop**: Replaced 150 s retry loop with single marker-file write; integration polls every 60 s.
+
 ## 0.7.0 — 2026-03-20
 
 ### Added

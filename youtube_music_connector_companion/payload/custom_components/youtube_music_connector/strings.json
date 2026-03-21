@@ -64,6 +64,20 @@
       }
     }
   },
+  "issues": {
+    "restart_required": {
+      "title": "YouTube Music Connector auf v{version} aktualisiert — Neustart erforderlich",
+      "description": "Das Companion-Add-on hat die Integrationsdateien auf Version {version} aktualisiert. Ein Neustart von Home Assistant ist noetig, um die neue Version zu aktivieren.",
+      "fix_flow": {
+        "step": {
+          "init": {
+            "title": "Home Assistant jetzt neu starten",
+            "description": "Klicke auf Absenden, um Home Assistant neu zu starten und die aktualisierte Integration v{version} zu aktivieren."
+          }
+        }
+      }
+    }
+  },
   "panel": {
     "title": "YouTube Music"
   }

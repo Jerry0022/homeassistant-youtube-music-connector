@@ -334,19 +334,7 @@ class YoutubeMusicConnectorManager:
     async def async_set_selected_devices(self, device_ids: list[str]) -> dict[str, Any]:
         """Set the full ordered list of selected devices. First = primary."""
         filtered = [d for d in device_ids if d not in self._exclude_devices]
-        previous_primary = self._selected_device_ids[0] if self._selected_device_ids else ""
         new_primary = filtered[0] if filtered else ""
-
-        # Pause previous primary if it was actively playing our stream
-        if previous_primary and previous_primary != new_primary:
-            old_session = self._sessions.get(previous_primary)
-            if old_session and self._should_pause_session_on_switch(old_session):
-                await self.hass.services.async_call(
-                    "media_player",
-                    "media_pause",
-                    {"entity_id": previous_primary},
-                    blocking=True,
-                )
 
         self._selected_device_ids = filtered
 
@@ -374,6 +362,35 @@ class YoutubeMusicConnectorManager:
         ]
         await self.async_set_selected_devices(new_list)
         return {"group_targets": list(self._selected_device_ids[1:])}
+
+    async def _async_ensure_device_on(self, entity_id: str, timeout: float = 15.0) -> bool:
+        """Turn on a device if it's off and wait for it to become ready."""
+        state = self.hass.states.get(entity_id)
+        if state and state.state not in {
+            MediaPlayerState.OFF, "standby", STATE_UNAVAILABLE, STATE_UNKNOWN
+        }:
+            return True
+        try:
+            await self.hass.services.async_call(
+                "media_player",
+                "turn_on",
+                {"entity_id": entity_id},
+                blocking=True,
+            )
+        except Exception as err:
+            _LOGGER.warning("Failed to turn on %s: %s", entity_id, err)
+            return False
+        # Wait for device to reach a usable state
+        deadline = asyncio.get_event_loop().time() + timeout
+        while asyncio.get_event_loop().time() < deadline:
+            await asyncio.sleep(1.0)
+            state = self.hass.states.get(entity_id)
+            if state and state.state not in {
+                MediaPlayerState.OFF, "standby", STATE_UNAVAILABLE, STATE_UNKNOWN
+            }:
+                return True
+        _LOGGER.warning("Device %s did not come online within %ss", entity_id, timeout)
+        return False
 
     def _should_pause_session_on_switch(self, session: "DeviceSession") -> bool:
         if not session._current_resolved:
@@ -476,31 +493,66 @@ class YoutubeMusicConnectorManager:
     async def async_play(self, target_entity_id: str, item_type: str, item_id: str) -> dict[str, Any]:
         if target_entity_id:
             await self.async_set_target(target_entity_id)
-        session = self.primary_session
-        if not session:
+        if not self._selected_device_ids:
             raise HomeAssistantError("No target media player selected")
+
+        # Ensure all selected devices are on (in parallel)
+        all_devices = list(self._selected_device_ids)
+        turn_on_results = await asyncio.gather(
+            *[self._async_ensure_device_on(d) for d in all_devices],
+            return_exceptions=True,
+        )
+        ready_devices = [
+            d for d, r in zip(all_devices, turn_on_results)
+            if r is True
+        ]
+        if not ready_devices:
+            raise HomeAssistantError("No target devices could be turned on")
+
         try:
-            result = await session.async_play(item_type, item_id)
-            # Mirror to all secondary selected sessions
-            secondary = self._selected_device_ids[1:]
-            if secondary and session._current_resolved:
-                mirror_tasks = [
-                    self._async_start_resolved_playback_on(session._current_resolved, d)
-                    for d in secondary
-                ]
-                mirror_results = await asyncio.gather(*mirror_tasks, return_exceptions=True)
-                for d, r in zip(secondary, mirror_results):
-                    if isinstance(r, Exception):
-                        _LOGGER.warning("Mirror playback to %s failed: %s", d, r)
+            # Resolve stream once
+            resolved = await self._async_resolve_playback(item_type, item_id)
+
+            # Play on ALL ready devices in parallel
+            play_tasks = []
+            for device_id in ready_devices:
+                session = self.get_or_create_session(device_id)
+                play_tasks.append(
+                    session._async_start_resolved_playback(resolved)
+                )
+            results = await asyncio.gather(*play_tasks, return_exceptions=True)
+            for device_id, result in zip(ready_devices, results):
+                if isinstance(result, Exception):
+                    _LOGGER.warning("Playback start failed for %s: %s", device_id, result)
+
+            # Prepare autoplay context on primary session
+            primary = self.primary_session
+            if primary:
+                await primary._async_prepare_autoplay_context(item_type, item_id, resolved.playable_id)
+
             self._last_error = ""
-            # Record to recently played cache after successful playback
-            if session._current_resolved:
-                try:
-                    self._record_recent_play(item_type, item_id, session._current_resolved)
-                except Exception:
-                    pass  # Never let cache recording break playback
-            return result
+            # Record to recently played cache
+            try:
+                self._record_recent_play(item_type, item_id, resolved)
+            except Exception:
+                pass
+            self.async_notify()
+            return {
+                "target_entity_id": self.target_entity_id,
+                "resolved": {
+                    "item_type": resolved.item_type,
+                    "item_id": resolved.item_id,
+                    "playable_id": resolved.playable_id,
+                    "title": resolved.title,
+                    "artist": resolved.artist,
+                    "image_url": resolved.image_url,
+                    "url": resolved.url,
+                    "stream_url": resolved.stream_url,
+                    "proxy_url": resolved.proxy_url,
+                },
+            }
         except Exception as err:
+            session = self.primary_session
             if session:
                 session._last_error = f"Playback failed: {err}"
             self._last_error = f"Playback failed: {err}"

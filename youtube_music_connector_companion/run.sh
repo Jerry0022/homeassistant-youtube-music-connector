@@ -101,40 +101,9 @@ send_restart_notification() {
     local title="YouTube Music Connector updated to v${version}"
     local message="The YouTube Music Connector integration has been updated. **Please restart Home Assistant** to activate the new version."
 
-    if [ -z "${SUPERVISOR_TOKEN:-}" ]; then
-        bashio::log.warning "SUPERVISOR_TOKEN is not set — cannot create restart notification"
-        return
-    fi
-
-    local payload="{\"notification_id\": \"${notification_id}\", \"title\": \"${title}\", \"message\": \"${message}\"}"
-    local response=""
-    local status=""
-    local retries=0
-
-    # Retry the notification POST directly with 5s backoff.
-    # No separate health check — just try the actual call until Core is ready.
-    while [ $retries -lt 30 ]; do
-        response="$(curl -sSL -w "\n%{http_code}" -X POST \
-            -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
-            -H "Content-Type: application/json" \
-            "http://supervisor/core/api/services/persistent_notification/create" \
-            -d "$payload" 2>&1)" || true
-        status="$(echo "$response" | tail -n1)"
-
-        if [ "$status" = "200" ] || [ "$status" = "201" ]; then
-            bashio::log.info "Restart notification created (HTTP ${status})"
-            return
-        fi
-
-        retries=$((retries + 1))
-        bashio::log.info "Notification attempt ${retries}/30 failed (HTTP ${status}), retrying in 5s..."
-        sleep 5
-    done
-
-    bashio::log.warning "All ${retries} notification attempts failed (last HTTP ${status})"
-
-    # Fallback: write marker file for integration to pick up on next HA restart
-    bashio::log.info "Writing restart marker file as fallback..."
+    # Write marker file — the running integration polls for this every 60s
+    # and creates a Repairs issue (Settings > System > Repairs) with a restart button.
+    bashio::log.info "Writing restart marker file..."
     cat > "/config/.storage/youtube_music_connector_restart_needed.json" <<NOTIF
 {
   "version": "${version}",
@@ -144,7 +113,26 @@ send_restart_notification() {
   "notification_id": "${notification_id}"
 }
 NOTIF
-    bashio::log.info "Restart marker written — notification will appear after HA restart"
+    bashio::log.info "Restart marker written — repair issue will appear in Settings within 60s"
+
+    # Also try a single persistent notification as fallback for older integration versions
+    # that do not have the Repairs-based marker watcher yet.
+    if [ -n "${SUPERVISOR_TOKEN:-}" ]; then
+        local payload="{\"notification_id\": \"${notification_id}\", \"title\": \"${title}\", \"message\": \"${message}\"}"
+        local response=""
+        local status=""
+        response="$(curl -sSL -w "\n%{http_code}" -X POST \
+            -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
+            -H "Content-Type: application/json" \
+            "http://supervisor/core/api/services/persistent_notification/create" \
+            -d "$payload" 2>&1)" || true
+        status="$(echo "$response" | tail -n1)"
+        if [ "$status" = "200" ] || [ "$status" = "201" ]; then
+            bashio::log.info "Persistent notification created as fallback (HTTP ${status})"
+        else
+            bashio::log.info "Persistent notification fallback skipped (HTTP ${status})"
+        fi
+    fi
 }
 
 # ── Main ──

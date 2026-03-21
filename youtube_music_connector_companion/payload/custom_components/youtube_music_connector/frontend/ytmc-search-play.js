@@ -80,12 +80,9 @@ class YtmcSearchPlay extends HTMLElement {
   async _play(itemType, itemId) {
     const targets = this._activeTargets();
     if (targets.length === 0) return;
-    const primary = targets[0];
-    const group = targets.slice(1);
     // Sync device selection to backend only on play
-    await this._hass.callService("media_player", "select_source", { entity_id: this._entityId, source: primary });
-    await this._hass.callService("youtube_music_connector", "set_group_targets", { entity_id: this._entityId, group_targets: group });
-    // Play — manager mirrors to group automatically
+    await this._hass.callService("youtube_music_connector", "set_selected_devices", { entity_id: this._entityId, selected_devices: targets });
+    // Play — manager routes to all selected sessions
     await this._hass.callService("youtube_music_connector", "play", {
       entity_id: this._entityId, item_type: itemType, item_id: itemId,
     });

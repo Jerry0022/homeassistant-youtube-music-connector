@@ -16,10 +16,9 @@ from pytubefix import YouTube
 
 from homeassistant.components.media_player.const import MediaPlayerEntityFeature, MediaPlayerState
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
-from homeassistant.core import Event, HomeAssistant
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.network import get_url
 
 from .const import (
@@ -28,6 +27,7 @@ from .const import (
     ATTR_QUERY,
     ATTR_RESULTS,
     ATTR_SEARCH_TYPE,
+    ATTR_SELECTED_DEVICES,
     CONF_DEFAULT_TARGET_MEDIA_PLAYER,
     CONF_EXCLUDE_DEVICES,
     CONF_HEADER_PATH,
@@ -70,7 +70,7 @@ class ResolvedPlayback:
 
 
 class YoutubeMusicConnectorManager:
-    """Owns API access, current state and cached search results."""
+    """Owns API access, per-device sessions and cached search results."""
 
     def __init__(self, hass: HomeAssistant, entry) -> None:
         self.hass = hass
@@ -78,10 +78,14 @@ class YoutubeMusicConnectorManager:
         self._api: YoutubeMusicApiClient | None = None
         self._listeners: list[Callable[[], None]] = []
         self._lock = asyncio.Lock()
-        self._target_entity_id: str = entry.options.get(
+
+        default_target: str = entry.options.get(
             CONF_DEFAULT_TARGET_MEDIA_PLAYER,
             entry.data.get(CONF_DEFAULT_TARGET_MEDIA_PLAYER, ""),
         )
+        # selected_device_ids: ordered list; first entry is the primary session.
+        self._selected_device_ids: list[str] = [default_target] if default_target else []
+
         self._last_search_payload: dict[str, Any] = {
             ATTR_QUERY: "",
             ATTR_SEARCH_TYPE: SEARCH_TYPE_ALL,
@@ -90,24 +94,41 @@ class YoutubeMusicConnectorManager:
             "count": 0,
         }
         self._search_index: dict[tuple[str, str], dict[str, Any]] = {}
-        self._current_item: dict[str, Any] = {}
-        self._current_resolved: ResolvedPlayback | None = None
-        self._current_playback_target_entity_id: str = ""
         self._last_error: str = ""
         self._entity_id: str = ""
-        self._autoplay_enabled = False
-        self._autoplay_queue: list[dict[str, Any]] = []
-        self._autoplay_context: dict[str, Any] = {}
-        self._advancing_autoplay = False
-        self._suppress_next_autoplay_once = False
-        self._target_listener_unsub: Callable[[], None] | None = None
-        self._shuffle_enabled = False
-        self._repeat_mode = REPEAT_MODE_OFF
-        self._playback_history: list[ResolvedPlayback] = []
-        self._group_targets: list[str] = []
         self._exclude_devices: set[str] = set(
             entry.options.get(CONF_EXCLUDE_DEVICES, entry.data.get(CONF_EXCLUDE_DEVICES, []))
         )
+
+        # Per-device sessions, lazily created via get_or_create_session().
+        self._sessions: dict[str, DeviceSession] = {}
+
+    # ------------------------------------------------------------------
+    # Session management
+    # ------------------------------------------------------------------
+
+    def get_or_create_session(self, entity_id: str) -> "DeviceSession":
+        """Return the existing session or create a new one for entity_id."""
+        if entity_id not in self._sessions:
+            from .device_session import DeviceSession
+            session = DeviceSession(self, entity_id)
+            self._sessions[entity_id] = session
+        return self._sessions[entity_id]
+
+    @property
+    def primary_session(self) -> "DeviceSession | None":
+        """Return the session for the first selected device, if any."""
+        if not self._selected_device_ids:
+            return None
+        return self.get_or_create_session(self._selected_device_ids[0])
+
+    @property
+    def selected_device_ids(self) -> list[str]:
+        return list(self._selected_device_ids)
+
+    # ------------------------------------------------------------------
+    # Basic properties
+    # ------------------------------------------------------------------
 
     @property
     def name(self) -> str:
@@ -115,20 +136,24 @@ class YoutubeMusicConnectorManager:
 
     @property
     def state(self) -> str:
-        target_state = self.target_state
-        if target_state in {MediaPlayerState.PLAYING, MediaPlayerState.PAUSED, MediaPlayerState.IDLE}:
-            return target_state
-        if self._current_item:
-            return MediaPlayerState.IDLE
+        session = self.primary_session
+        if session:
+            target_state = session.state
+            if target_state in {MediaPlayerState.PLAYING, MediaPlayerState.PAUSED, MediaPlayerState.IDLE}:
+                return target_state
+            if session._current_item:
+                return MediaPlayerState.IDLE
         return MediaPlayerState.OFF
 
     @property
     def target_entity_id(self) -> str:
-        return self._target_entity_id
+        """Primary selected device entity_id (legacy compat)."""
+        return self._selected_device_ids[0] if self._selected_device_ids else ""
 
+    # Legacy compat: group_targets = selected_device_ids[1:]
     @property
     def group_targets(self) -> list[str]:
-        return list(self._group_targets)
+        return list(self._selected_device_ids[1:])
 
     @property
     def entity_id(self) -> str:
@@ -136,14 +161,14 @@ class YoutubeMusicConnectorManager:
 
     @property
     def target_state(self) -> str | None:
-        if not self._target_entity_id:
-            return None
-        state = self.hass.states.get(self._target_entity_id)
-        return state.state if state else None
+        """State of the primary target device."""
+        session = self.primary_session
+        return session.state if session else None
 
     @property
     def current_item(self) -> dict[str, Any]:
-        return deepcopy(self._current_item)
+        session = self.primary_session
+        return session.current_item if session else {}
 
     @property
     def search_payload(self) -> dict[str, Any]:
@@ -151,7 +176,8 @@ class YoutubeMusicConnectorManager:
 
     @property
     def last_error(self) -> str:
-        return self._last_error
+        session = self.primary_session
+        return session.last_error if session else self._last_error
 
     @property
     def source_list(self) -> list[str]:
@@ -172,48 +198,39 @@ class YoutubeMusicConnectorManager:
 
     @property
     def media_title(self) -> str | None:
-        if not self._current_item:
-            return None
-        item_type = self._current_item.get("type")
-        if item_type == ITEM_TYPE_PLAYLIST:
-            return self._current_item.get("playlist_name") or self._current_item.get("artist")
-        if item_type == ITEM_TYPE_ARTIST:
-            return self._current_item.get("artist")
-        return self._current_item.get("title") or self._current_item.get("artist")
+        session = self.primary_session
+        return session.media_title if session else None
 
     @property
     def media_artist(self) -> str | None:
-        if not self._current_item:
-            return None
-        item_type = self._current_item.get("type")
-        if item_type == ITEM_TYPE_ARTIST:
-            return None
-        return self._current_item.get("artist") or None
+        session = self.primary_session
+        return session.media_artist if session else None
 
     @property
     def media_image_url(self) -> str | None:
-        return self._current_item.get("image_url") or None
+        session = self.primary_session
+        return session.media_image_url if session else None
 
     @property
     def media_duration(self) -> float | None:
-        duration = self._target_state_attr("media_duration")
+        duration = self._primary_target_state_attr("media_duration")
         return float(duration) if isinstance(duration, (int, float)) else None
 
     @property
     def media_position(self) -> float | None:
         if self._should_reset_position_on_idle():
             return 0.0
-        position = self._target_state_attr("media_position")
+        position = self._primary_target_state_attr("media_position")
         return float(position) if isinstance(position, (int, float)) else None
 
     @property
     def media_position_updated_at(self) -> datetime | None:
-        updated_at = self._target_state_attr("media_position_updated_at")
+        updated_at = self._primary_target_state_attr("media_position_updated_at")
         return updated_at if isinstance(updated_at, datetime) else None
 
     @property
     def target_supports_seek(self) -> bool:
-        state = self._target_state_object()
+        state = self._primary_target_state_object()
         if not state:
             return False
         supported = int(state.attributes.get("supported_features", 0))
@@ -221,38 +238,57 @@ class YoutubeMusicConnectorManager:
 
     @property
     def has_next_track(self) -> bool:
-        return bool(self._autoplay_queue) or self._autoplay_enabled
+        session = self.primary_session
+        return session.has_next_track if session else False
 
     @property
     def has_previous_track(self) -> bool:
-        return bool(self._playback_history)
+        session = self.primary_session
+        return session.has_previous_track if session else False
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
+        session = self.primary_session
+        current_item = session._current_item if session else {}
+        autoplay_enabled = session._autoplay_enabled if session else False
+        autoplay_queue_length = len(session._autoplay_queue) if session else 0
+        shuffle_enabled = session._shuffle_enabled if session else False
+        repeat_mode = session._repeat_mode if session else REPEAT_MODE_OFF
+        last_error = session._last_error if session else self._last_error
+
         attrs = {
             "search_results": self._last_search_payload.get(ATTR_RESULTS, []),
             "search_query": self._last_search_payload.get(ATTR_QUERY, ""),
             "search_type": self._last_search_payload.get(ATTR_SEARCH_TYPE, SEARCH_TYPE_ALL),
             "search_count": self._last_search_payload.get("count", 0),
-            "target_entity_id": self._target_entity_id,
+            "target_entity_id": self.target_entity_id,
             "available_target_players": self.source_list,
-            "current_item": self._current_item,
-            "last_error": self._last_error,
+            "current_item": current_item,
+            "last_error": last_error,
             "is_youtube_music_connector": True,
-            "autoplay_enabled": self._autoplay_enabled,
-            "autoplay_queue_length": len(self._autoplay_queue),
-            "shuffle_enabled": self._shuffle_enabled,
-            "repeat_mode": self._repeat_mode,
+            "autoplay_enabled": autoplay_enabled,
+            "autoplay_queue_length": autoplay_queue_length,
+            "shuffle_enabled": shuffle_enabled,
+            "repeat_mode": repeat_mode,
             "has_next_track": self.has_next_track,
             "has_previous_track": self.has_previous_track,
-            "group_targets": list(self._group_targets),
+            # New attribute: full ordered list of selected devices
+            ATTR_SELECTED_DEVICES: list(self._selected_device_ids),
+            # Legacy: group_targets = all except first
+            "group_targets": list(self._selected_device_ids[1:]),
+            # Active sessions summary
+            "active_sessions": {eid: s.summary_dict() for eid, s in self._sessions.items()},
         }
-        if self._current_resolved:
+        if session and session._current_resolved:
             attrs["resolved_stream"] = {
-                "playable_id": self._current_resolved.playable_id,
-                ATTR_PROXY_URL: self._current_resolved.proxy_url,
+                "playable_id": session._current_resolved.playable_id,
+                ATTR_PROXY_URL: session._current_resolved.proxy_url,
             }
         return attrs
+
+    # ------------------------------------------------------------------
+    # Listener management
+    # ------------------------------------------------------------------
 
     def async_add_listener(self, listener: Callable[[], None]) -> Callable[[], None]:
         self._listeners.append(listener)
@@ -267,222 +303,254 @@ class YoutubeMusicConnectorManager:
         for listener in list(self._listeners):
             listener()
 
+    # ------------------------------------------------------------------
+    # Setup
+    # ------------------------------------------------------------------
+
     async def async_setup(self) -> None:
         try:
             await self.async_ensure_api()
-            await self._async_rebind_target_listener()
+            # Bind listener for the default target if configured
+            if self._selected_device_ids:
+                session = self.get_or_create_session(self._selected_device_ids[0])
+                await session.async_bind()
             self._last_error = ""
         except Exception as err:
             self._last_error = str(err)
             self.async_notify()
             raise
 
-    async def async_set_target(self, entity_id: str) -> None:
-        if entity_id in self._exclude_devices:
-            raise HomeAssistantError(f"Device {entity_id} is excluded from playback")
-        previous_target = self._target_entity_id
-        if previous_target and previous_target != entity_id:
-            if self._should_pause_previous_target_on_switch(previous_target):
+    # ------------------------------------------------------------------
+    # Device / target selection
+    # ------------------------------------------------------------------
+
+    async def async_set_selected_devices(self, device_ids: list[str]) -> dict[str, Any]:
+        """Set the full ordered list of selected devices. First = primary."""
+        filtered = [d for d in device_ids if d not in self._exclude_devices]
+        previous_primary = self._selected_device_ids[0] if self._selected_device_ids else ""
+        new_primary = filtered[0] if filtered else ""
+
+        # Pause previous primary if it was actively playing our stream
+        if previous_primary and previous_primary != new_primary:
+            old_session = self._sessions.get(previous_primary)
+            if old_session and self._should_pause_session_on_switch(old_session):
                 await self.hass.services.async_call(
                     "media_player",
                     "media_pause",
-                    {"entity_id": previous_target},
+                    {"entity_id": previous_primary},
                     blocking=True,
                 )
-        self._target_entity_id = entity_id
-        if entity_id in self._group_targets:
-            self._group_targets.remove(entity_id)
-        await self._async_rebind_target_listener()
+
+        self._selected_device_ids = filtered
+
+        # Ensure primary session is bound
+        if new_primary:
+            session = self.get_or_create_session(new_primary)
+            await session.async_bind()
+
         self.async_notify()
+        return {ATTR_SELECTED_DEVICES: list(self._selected_device_ids)}
+
+    async def async_set_target(self, entity_id: str) -> None:
+        """Legacy: set a single primary target device."""
+        if entity_id in self._exclude_devices:
+            raise HomeAssistantError(f"Device {entity_id} is excluded from playback")
+        # Build new selected list: [entity_id] + existing non-primary devices
+        existing_secondary = [d for d in self._selected_device_ids[1:] if d != entity_id]
+        await self.async_set_selected_devices([entity_id] + existing_secondary)
 
     async def async_set_group_targets(self, targets: list[str]) -> dict[str, Any]:
-        self._group_targets = [t for t in targets if t != self._target_entity_id and t not in self._exclude_devices]
-        self.async_notify()
-        return {"group_targets": list(self._group_targets)}
-
-    async def _async_mirror_to_group(self, domain: str, service: str, data: dict[str, Any]) -> None:
-        if not self._group_targets:
-            return
-        tasks = []
-        for target in self._group_targets:
-            call_data = dict(data)
-            call_data["entity_id"] = target
-            tasks.append(
-                self.hass.services.async_call(domain, service, call_data, blocking=True)
-            )
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        for target, result in zip(self._group_targets, results):
-            if isinstance(result, Exception):
-                _LOGGER.warning("Mirror %s.%s to %s failed: %s", domain, service, target, result)
-
-    async def _async_mirror_playback_to_group(self, resolved: ResolvedPlayback) -> None:
-        if not self._group_targets:
-            return
-        tasks = [
-            self._async_start_resolved_playback_on(resolved, target)
-            for target in self._group_targets
+        """Deprecated: set additional targets alongside the current primary."""
+        primary = self._selected_device_ids[0] if self._selected_device_ids else ""
+        new_list = ([primary] if primary else []) + [
+            t for t in targets if t != primary and t not in self._exclude_devices
         ]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        for target, result in zip(self._group_targets, results):
-            if isinstance(result, Exception):
-                _LOGGER.warning("Mirror playback to %s failed: %s", target, result)
+        await self.async_set_selected_devices(new_list)
+        return {"group_targets": list(self._selected_device_ids[1:])}
 
-    def _should_pause_previous_target_on_switch(self, previous_target: str) -> bool:
-        if not previous_target or previous_target != self._current_playback_target_entity_id:
+    def _should_pause_session_on_switch(self, session: "DeviceSession") -> bool:
+        if not session._current_resolved:
             return False
-        if not self._current_resolved:
+        state = self.hass.states.get(session.entity_id)
+        if not state or state.state != MediaPlayerState.PLAYING:
             return False
-        previous_state = self.hass.states.get(previous_target)
-        if not previous_state or previous_state.state != MediaPlayerState.PLAYING:
-            return False
-        return previous_state.attributes.get("media_content_id") == self._current_resolved.proxy_url
+        return state.attributes.get("media_content_id") == session._current_resolved.proxy_url
 
     async def async_set_entity_id(self, entity_id: str) -> None:
         self._entity_id = entity_id
         self.async_notify()
 
+    # ------------------------------------------------------------------
+    # Playback mode setters — applied to all selected sessions
+    # ------------------------------------------------------------------
+
     async def async_set_autoplay(self, enabled: bool) -> dict[str, Any]:
-        self._autoplay_enabled = bool(enabled)
-        if not self._should_continue_after_track():
-            self._autoplay_queue = []
-            self._autoplay_context = {}
-        elif self._current_resolved:
-            await self._async_prepare_autoplay_context(
-                self._current_resolved.item_type,
-                self._current_resolved.item_id,
-                self._current_resolved.playable_id,
-            )
-        self.async_notify()
-        return {"enabled": self._autoplay_enabled, "queue_length": len(self._autoplay_queue)}
+        result: dict[str, Any] = {}
+        for device_id in self._selected_device_ids:
+            session = self.get_or_create_session(device_id)
+            result = await session.async_set_autoplay(enabled)
+        return result
 
     async def async_set_shuffle(self, enabled: bool) -> dict[str, Any]:
-        self._shuffle_enabled = bool(enabled)
-        if self._current_resolved and self._should_continue_after_track():
-            await self._async_refresh_autoplay_queue(self._current_resolved.playable_id, force=True)
-        elif self._autoplay_queue:
-            self._shuffle_queue_in_place()
-        self.async_notify()
-        return {"shuffle_enabled": self._shuffle_enabled}
+        result: dict[str, Any] = {}
+        for device_id in self._selected_device_ids:
+            session = self.get_or_create_session(device_id)
+            result = await session.async_set_shuffle(enabled)
+        return result
 
     async def async_set_repeat_mode(self, repeat_mode: str) -> dict[str, Any]:
-        self._repeat_mode = normalize_repeat_mode(repeat_mode)
-        if not self._should_continue_after_track():
-            self._autoplay_queue = []
-            self._autoplay_context = {}
-        elif self._current_resolved:
-            await self._async_prepare_autoplay_context(
-                self._current_resolved.item_type,
-                self._current_resolved.item_id,
-                self._current_resolved.playable_id,
-            )
-        self.async_notify()
-        return {"repeat_mode": self._repeat_mode}
+        result: dict[str, Any] = {}
+        for device_id in self._selected_device_ids:
+            session = self.get_or_create_session(device_id)
+            result = await session.async_set_repeat_mode(repeat_mode)
+        return result
+
+    # ------------------------------------------------------------------
+    # Track navigation — primary session only
+    # ------------------------------------------------------------------
 
     async def async_next_track(self) -> dict[str, Any]:
-        """Skip to the next track in the autoplay queue."""
-        if not self._target_entity_id:
+        session = self.primary_session
+        if not session:
             raise HomeAssistantError("No target media player selected")
-        next_item = await self._async_pop_next_autoplay_track()
-        if not next_item:
-            raise HomeAssistantError("No next track available")
-        video_id = next_item.get("videoId")
-        if not video_id:
-            raise HomeAssistantError("Next track has no video ID")
-        resolved = await self._async_resolve_playback(ITEM_TYPE_SONG, video_id)
-        resolved = ResolvedPlayback(
-            item_type=ITEM_TYPE_SONG,
-            item_id=video_id,
-            playable_id=resolved.playable_id,
-            title=next_item.get("title") or resolved.title,
-            artist=self._extract_artists(next_item) or resolved.artist,
-            image_url=self._extract_thumbnail(next_item) or resolved.image_url,
-            url=f"https://music.youtube.com/watch?v={video_id}",
-            stream_url=resolved.stream_url,
-            proxy_url=self._build_proxy_url(resolved.playable_id, ITEM_TYPE_SONG, video_id),
-        )
-        await self._async_start_resolved_playback(resolved)
-        await self._async_refresh_autoplay_queue(resolved.playable_id)
-        self._last_error = ""
-        self.async_notify()
-        return {"title": resolved.title, "artist": resolved.artist}
+        return await session.async_next_track()
 
     async def async_previous_track(self) -> dict[str, Any]:
-        """Go back to the previous track, or restart the current one."""
-        if not self._target_entity_id:
+        session = self.primary_session
+        if not session:
             raise HomeAssistantError("No target media player selected")
-        if self._playback_history:
-            previous = self._playback_history.pop()
-            await self._async_start_resolved_playback(previous)
-            self._last_error = ""
-            self.async_notify()
-            return {"title": previous.title, "artist": previous.artist}
-        await self.async_media_seek(0)
-        return {"action": "restarted"}
+        return await session.async_previous_track()
 
-    async def async_execute(self, payload: dict[str, Any]) -> dict[str, Any]:
-        target_entity_id = payload.get("target_entity_id", "")
+    # ------------------------------------------------------------------
+    # Transport — applied to all selected sessions
+    # ------------------------------------------------------------------
+
+    async def async_media_pause(self) -> None:
+        tasks = [
+            self.get_or_create_session(d).async_media_pause()
+            for d in self._selected_device_ids
+        ]
+        if tasks:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for device_id, result in zip(self._selected_device_ids, results):
+                if isinstance(result, Exception):
+                    _LOGGER.warning("media_pause failed for %s: %s", device_id, result)
+        self.async_notify()
+
+    async def async_media_play(self) -> None:
+        tasks = [
+            self.get_or_create_session(d).async_media_play()
+            for d in self._selected_device_ids
+        ]
+        if tasks:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for device_id, result in zip(self._selected_device_ids, results):
+                if isinstance(result, Exception):
+                    _LOGGER.warning("media_play failed for %s: %s", device_id, result)
+
+    async def async_media_stop(self) -> None:
+        tasks = [
+            self.get_or_create_session(d).async_media_stop()
+            for d in self._selected_device_ids
+        ]
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def async_media_seek(self, position: float) -> None:
+        """Seek on primary session only."""
+        session = self.primary_session
+        if session:
+            await session.async_media_seek(position)
+
+    # ------------------------------------------------------------------
+    # Play / stop
+    # ------------------------------------------------------------------
+
+    async def async_play(self, target_entity_id: str, item_type: str, item_id: str) -> dict[str, Any]:
         if target_entity_id:
             await self.async_set_target(target_entity_id)
+        session = self.primary_session
+        if not session:
+            raise HomeAssistantError("No target media player selected")
+        try:
+            result = await session.async_play(item_type, item_id)
+            # Mirror to all secondary selected sessions
+            secondary = self._selected_device_ids[1:]
+            if secondary and session._current_resolved:
+                mirror_tasks = [
+                    self._async_start_resolved_playback_on(session._current_resolved, d)
+                    for d in secondary
+                ]
+                mirror_results = await asyncio.gather(*mirror_tasks, return_exceptions=True)
+                for d, r in zip(secondary, mirror_results):
+                    if isinstance(r, Exception):
+                        _LOGGER.warning("Mirror playback to %s failed: %s", d, r)
+            self._last_error = ""
+            return result
+        except Exception as err:
+            if session:
+                session._last_error = f"Playback failed: {err}"
+            self._last_error = f"Playback failed: {err}"
+            self.async_notify()
+            _LOGGER.exception("Failed to start playback for %s/%s", item_type, item_id)
+            raise HomeAssistantError(f"Could not start playback: {err}") from err
 
-        if "autoplay_enabled" in payload:
-            await self.async_set_autoplay(bool(payload["autoplay_enabled"]))
-        if "shuffle_enabled" in payload:
-            await self.async_set_shuffle(bool(payload["shuffle_enabled"]))
-        if "repeat_mode" in payload:
-            await self.async_set_repeat_mode(str(payload["repeat_mode"]))
+    async def async_play_on(self, target_entity_id: str, item_type: str, item_id: str) -> dict[str, Any]:
+        """Play on a specific target without switching the manager's active target."""
+        if not target_entity_id:
+            raise HomeAssistantError("No target media player specified")
+        resolved = await self._async_resolve_playback(item_type, item_id)
+        await self._async_start_resolved_playback_on(resolved, target_entity_id)
+        return {"target_entity_id": target_entity_id, "title": resolved.title}
 
-        query = str(payload.get("query", "") or "").strip()
-        search_type = str(payload.get("search_type", SEARCH_TYPE_ALL) or SEARCH_TYPE_ALL)
-        limit = int(payload.get("limit", DEFAULT_LIMIT) or DEFAULT_LIMIT)
-        should_play = bool(payload.get("play", False))
+    async def async_stop(self, target_entity_id: str | None = None) -> dict[str, Any]:
+        if target_entity_id:
+            await self.async_set_target(target_entity_id)
+        session = self.primary_session
+        if not session:
+            raise HomeAssistantError("No target media player selected")
+        await session.async_stop()
+        # Stop secondary devices too
+        secondary_tasks = [
+            self.get_or_create_session(d).async_media_stop()
+            for d in self._selected_device_ids[1:]
+        ]
+        if secondary_tasks:
+            await asyncio.gather(*secondary_tasks, return_exceptions=True)
+        self._last_error = ""
+        self.async_notify()
+        return {"target_entity_id": self.target_entity_id, "stopped": True}
 
-        direct_item = self._resolve_programmatic_item(payload)
-        search_payload: dict[str, Any] | None = None
-        selected_item: dict[str, Any] | None = None
+    # ------------------------------------------------------------------
+    # Low-level stream playback (shared utility)
+    # ------------------------------------------------------------------
 
-        if direct_item is not None:
-            item_type, item_id = direct_item
-            selected_item = {"type": item_type, "id": item_id}
-        elif query:
-            search_payload = await self.async_search(query, search_type, limit)
-            results = search_payload.get(ATTR_RESULTS, [])
-            if results:
-                selected_item = results[0]
-        else:
-            raise HomeAssistantError(
-                "No executable input provided. Use query, song_id, playlist_id, artist_id, item_type/item_id, or youtube_url."
-            )
+    async def _async_start_resolved_playback_on(self, resolved: ResolvedPlayback, target_entity_id: str) -> None:
+        """Start playback on a specific target without updating session state."""
+        media_types = self._playback_media_types_for(resolved.item_type, target_entity_id)
+        last_error: Exception | None = None
+        for media_type in media_types:
+            try:
+                await self.hass.services.async_call(
+                    "media_player",
+                    "play_media",
+                    {
+                        "entity_id": target_entity_id,
+                        "media_content_id": resolved.proxy_url,
+                        "media_content_type": media_type,
+                        "enqueue": "replace",
+                    },
+                    blocking=True,
+                )
+                return
+            except Exception as err:
+                last_error = err
+        if last_error is not None:
+            raise last_error
 
-        response: dict[str, Any] = {
-            "selected": selected_item,
-            "search": search_payload,
-            "autoplay_enabled": self._autoplay_enabled,
-            "shuffle_enabled": self._shuffle_enabled,
-            "repeat_mode": self._repeat_mode,
-            "target_entity_id": self._target_entity_id,
-        }
-
-        if selected_item is None:
-            return response
-
-        if should_play:
-            play_result = await self.async_play(
-                self._target_entity_id,
-                selected_item["type"],
-                selected_item["id"],
-            )
-            response["playback"] = play_result
-        else:
-            response["resolved"] = await self.async_resolve_stream(
-                selected_item["type"],
-                selected_item["id"],
-            )
-
-        if payload.get("volume_percent") is not None:
-            await self._async_set_programmatic_volume(int(payload["volume_percent"]))
-            response["volume_percent"] = int(payload["volume_percent"])
-
-        return response
+    # ------------------------------------------------------------------
+    # API
+    # ------------------------------------------------------------------
 
     async def async_ensure_api(self) -> YoutubeMusicApiClient:
         async with self._lock:
@@ -501,6 +569,10 @@ class YoutubeMusicConnectorManager:
                 _LOGGER.exception("Failed to initialize youtube_music_connector API")
                 raise HomeAssistantError("YouTube Music API could not be initialized") from err
             return self._api
+
+    # ------------------------------------------------------------------
+    # Search
+    # ------------------------------------------------------------------
 
     async def async_search(self, query: str, search_type: str, limit: int) -> dict[str, Any]:
         query = query.strip()
@@ -645,190 +717,75 @@ class YoutubeMusicConnectorManager:
             _LOGGER.exception("Failed to resolve stream for %s/%s", item_type, item_id)
             raise HomeAssistantError(f"Could not resolve stream: {err}") from err
 
-    async def async_play(self, target_entity_id: str, item_type: str, item_id: str) -> dict[str, Any]:
+    async def async_execute(self, payload: dict[str, Any]) -> dict[str, Any]:
+        target_entity_id = payload.get("target_entity_id", "")
         if target_entity_id:
             await self.async_set_target(target_entity_id)
-        if not self._target_entity_id:
-            raise HomeAssistantError("No target media player selected")
 
-        try:
-            resolved = await self._async_resolve_playback(item_type, item_id)
-            await self._async_start_resolved_playback(resolved)
-            await self._async_prepare_autoplay_context(item_type, item_id, resolved.playable_id)
-            self._last_error = ""
-            self.async_notify()
-            return {
-                "target_entity_id": self._target_entity_id,
-                "resolved": {
-                    "item_type": resolved.item_type,
-                    "item_id": resolved.item_id,
-                    "playable_id": resolved.playable_id,
-                    "title": resolved.title,
-                    "artist": resolved.artist,
-                    "image_url": resolved.image_url,
-                    "url": resolved.url,
-                    "stream_url": resolved.stream_url,
-                    ATTR_PROXY_URL: resolved.proxy_url,
-                },
-            }
-        except Exception as err:
-            self._last_error = f"Playback failed: {err}"
-            self.async_notify()
-            _LOGGER.exception("Failed to start playback for %s/%s", item_type, item_id)
-            raise HomeAssistantError(f"Could not start playback: {err}") from err
+        if "autoplay_enabled" in payload:
+            await self.async_set_autoplay(bool(payload["autoplay_enabled"]))
+        if "shuffle_enabled" in payload:
+            await self.async_set_shuffle(bool(payload["shuffle_enabled"]))
+        if "repeat_mode" in payload:
+            await self.async_set_repeat_mode(str(payload["repeat_mode"]))
 
-    async def async_play_on(self, target_entity_id: str, item_type: str, item_id: str) -> dict[str, Any]:
-        """Play on a specific target without switching the manager's active target."""
-        if not target_entity_id:
-            raise HomeAssistantError("No target media player specified")
-        resolved = await self._async_resolve_playback(item_type, item_id)
-        await self._async_start_resolved_playback_on(resolved, target_entity_id)
-        return {"target_entity_id": target_entity_id, "title": resolved.title}
+        query = str(payload.get("query", "") or "").strip()
+        search_type = str(payload.get("search_type", SEARCH_TYPE_ALL) or SEARCH_TYPE_ALL)
+        limit = int(payload.get("limit", DEFAULT_LIMIT) or DEFAULT_LIMIT)
+        should_play = bool(payload.get("play", False))
 
-    async def async_stop(self, target_entity_id: str | None = None) -> dict[str, Any]:
-        if target_entity_id:
-            self._target_entity_id = target_entity_id
-            await self._async_rebind_target_listener()
-        if not self._target_entity_id:
-            raise HomeAssistantError("No target media player selected")
-        self._suppress_next_autoplay_once = True
-        await self.async_media_stop()
-        self._last_error = ""
-        self.async_notify()
-        return {"target_entity_id": self._target_entity_id, "stopped": True}
+        direct_item = self._resolve_programmatic_item(payload)
+        search_payload: dict[str, Any] | None = None
+        selected_item: dict[str, Any] | None = None
 
-    async def _async_start_resolved_playback_on(self, resolved: ResolvedPlayback, target_entity_id: str) -> None:
-        """Start playback on a specific target without updating manager state."""
-        media_types = self._playback_media_types_for(resolved.item_type)
-        last_error: Exception | None = None
-        for media_type in media_types:
-            try:
-                await self.hass.services.async_call(
-                    "media_player",
-                    "play_media",
-                    {
-                        "entity_id": target_entity_id,
-                        "media_content_id": resolved.proxy_url,
-                        "media_content_type": media_type,
-                        "enqueue": "replace",
-                    },
-                    blocking=True,
-                )
-                return
-            except Exception as err:
-                last_error = err
-        if last_error is not None:
-            raise last_error
-
-    async def _async_start_resolved_playback(self, resolved: ResolvedPlayback) -> None:
-        media_types = self._playback_media_types_for(resolved.item_type)
-        last_error: Exception | None = None
-        for media_type in media_types:
-            try:
-                await self.hass.services.async_call(
-                    "media_player",
-                    "play_media",
-                    {
-                        "entity_id": self._target_entity_id,
-                        "media_content_id": resolved.proxy_url,
-                        "media_content_type": media_type,
-                        "enqueue": "replace",
-                    },
-                    blocking=True,
-                )
-                last_error = None
-                break
-            except Exception as err:
-                last_error = err
-                _LOGGER.debug(
-                    "play_media failed for %s on %s with media type %s: %s",
-                    resolved.item_id,
-                    self._target_entity_id,
-                    media_type,
-                    err,
-                )
-        if last_error is not None:
-            raise last_error
-        if self._current_resolved and self._current_resolved.item_id != resolved.item_id:
-            self._playback_history.append(self._current_resolved)
-            if len(self._playback_history) > 20:
-                self._playback_history = self._playback_history[-20:]
-        self._current_resolved = resolved
-        self._current_playback_target_entity_id = self._target_entity_id
-        self._current_item = {
-            "type": resolved.item_type,
-            "id": resolved.item_id,
-            "artist": resolved.artist,
-            "title": resolved.title if resolved.item_type == ITEM_TYPE_SONG else "",
-            "playlist_name": resolved.title if resolved.item_type == ITEM_TYPE_PLAYLIST else "",
-            "image_url": resolved.image_url,
-            "url": resolved.url,
-            "proxy_url": resolved.proxy_url,
-        }
-        await self._async_mirror_playback_to_group(resolved)
-
-    def _playback_media_types_for(self, item_type: str) -> list[str]:
-        primary = str(MEDIA_TYPE_MAP.get(item_type, "music"))
-        target_preferences = self._target_playback_media_type_preferences()
-        ordered = [*target_preferences, primary, "music", "audio/mpeg", "audio", "video", "url"]
-        seen: set[str] = set()
-        return [media_type for media_type in ordered if not (media_type in seen or seen.add(media_type))]
-
-    def _target_playback_media_type_preferences(self) -> list[str]:
-        target_state = self._target_state_object()
-        device_class = str(target_state.attributes.get("device_class", "")).lower() if target_state else ""
-        if device_class == "speaker":
-            return ["music"]
-        if device_class == "tv":
-            return ["video", "music"]
-
-        registry = er.async_get(self.hass)
-        entry = registry.async_get(self._target_entity_id) if self._target_entity_id else None
-        original_device_class = str(entry.original_device_class or "").lower() if entry else ""
-        if original_device_class == "speaker":
-            return ["music"]
-        if original_device_class == "tv":
-            return ["video", "music"]
-
-        haystack = " ".join(
-            part for part in [
-                self._target_entity_id or "",
-                str(target_state.attributes.get("friendly_name", "")) if target_state else "",
-                str(target_state.attributes.get("app_name", "")) if target_state else "",
-                str(target_state.attributes.get("source", "")) if target_state else "",
-            ] if part
-        ).lower()
-        if any(token in haystack for token in ("tv", "chromecast_tv", "projector", "display", "monitor", "cinema")):
-            return ["video", "music"]
-        return ["music", "video"]
-
-    async def _async_prepare_autoplay_context(self, item_type: str, item_id: str, playable_id: str) -> None:
-        if not self._should_continue_after_track():
-            self._autoplay_queue = []
-            self._autoplay_context = {}
-            return
-
-        api = await self.async_ensure_api()
-        queue: list[dict[str, Any]] = []
-        context: dict[str, Any] = {
-            "source_type": item_type,
-            "source_id": item_id,
-        }
-
-        if item_type == ITEM_TYPE_PLAYLIST:
-            playlist_id = self._normalize_playlist_id(item_id)
-            browse_id = self._search_index.get((item_type, item_id), {}).get("browse_id")
-            playlist = await api.async_get_playlist(playlist_id, limit=25, browse_id=browse_id)
-            tracks = playlist.get("tracks") or []
-            queue = [track for track in tracks if track.get("videoId") and track.get("videoId") != playable_id]
-            context["playlist_id"] = playlist_id
-            if browse_id:
-                context["playlist_browse_id"] = browse_id
+        if direct_item is not None:
+            item_type, item_id = direct_item
+            selected_item = {"type": item_type, "id": item_id}
+        elif query:
+            search_payload = await self.async_search(query, search_type, limit)
+            results = search_payload.get(ATTR_RESULTS, [])
+            if results:
+                selected_item = results[0]
         else:
-            queue = await api.async_get_up_next(playable_id, limit=12)
+            raise HomeAssistantError(
+                "No executable input provided. Use query, song_id, playlist_id, artist_id, item_type/item_id, or youtube_url."
+            )
 
-        self._autoplay_context = context
-        self._autoplay_queue = self._apply_queue_modes(queue)
+        session = self.primary_session
+        response: dict[str, Any] = {
+            "selected": selected_item,
+            "search": search_payload,
+            "autoplay_enabled": session._autoplay_enabled if session else False,
+            "shuffle_enabled": session._shuffle_enabled if session else False,
+            "repeat_mode": session._repeat_mode if session else REPEAT_MODE_OFF,
+            "target_entity_id": self.target_entity_id,
+        }
+
+        if selected_item is None:
+            return response
+
+        if should_play:
+            play_result = await self.async_play(
+                self.target_entity_id,
+                selected_item["type"],
+                selected_item["id"],
+            )
+            response["playback"] = play_result
+        else:
+            response["resolved"] = await self.async_resolve_stream(
+                selected_item["type"],
+                selected_item["id"],
+            )
+
+        if payload.get("volume_percent") is not None:
+            await self._async_set_programmatic_volume(int(payload["volume_percent"]))
+            response["volume_percent"] = int(payload["volume_percent"])
+
+        return response
+
+    # ------------------------------------------------------------------
+    # Stream resolution (shared, uses API)
+    # ------------------------------------------------------------------
 
     async def _async_resolve_playback(self, item_type: str, item_id: str) -> ResolvedPlayback:
         api = await self.async_ensure_api()
@@ -898,266 +855,91 @@ class YoutubeMusicConnectorManager:
         return f"{base}{DEFAULT_PROXY_PATH_PREFIX}/{self.entry.entry_id}/{item_type}/{item_id}?video_id={playable_id}"
 
     async def async_get_proxy_stream_url(self, item_type: str, item_id: str, playable_id: str | None = None) -> str:
-        if (
-            self._current_resolved
-            and self._current_resolved.item_type == item_type
-            and self._current_resolved.item_id == item_id
-            and (playable_id is None or self._current_resolved.playable_id == playable_id)
-        ):
-            return self._current_resolved.stream_url
+        # Check all active sessions first
+        for session in self._sessions.values():
+            cr = session._current_resolved
+            if (
+                cr
+                and cr.item_type == item_type
+                and cr.item_id == item_id
+                and (playable_id is None or cr.playable_id == playable_id)
+            ):
+                return cr.stream_url
         resolved = await self._async_resolve_playback(item_type, item_id)
-        self._current_resolved = resolved
+        # Cache on primary session if available
+        session = self.primary_session
+        if session:
+            session._current_resolved = resolved
         self.async_notify()
         return resolved.stream_url
 
-    async def async_media_pause(self) -> None:
-        if not self._target_entity_id:
-            return
+    # ------------------------------------------------------------------
+    # Media type helpers
+    # ------------------------------------------------------------------
 
-        await self.hass.services.async_call(
-            "media_player",
-            "media_pause",
-            {"entity_id": self._target_entity_id},
-            blocking=True,
-        )
+    def _playback_media_types_for(self, item_type: str, target_entity_id: str = "") -> list[str]:
+        primary = str(MEDIA_TYPE_MAP.get(item_type, "music"))
+        target_preferences = self._target_playback_media_type_preferences(target_entity_id)
+        ordered = [*target_preferences, primary, "music", "audio/mpeg", "audio", "video", "url"]
+        seen: set[str] = set()
+        return [media_type for media_type in ordered if not (media_type in seen or seen.add(media_type))]
 
-        await asyncio.sleep(0.2)
-        target_state = self.target_state
-        if target_state != MediaPlayerState.PLAYING:
-            await self._async_mirror_to_group("media_player", "media_pause", {})
-            self.async_notify()
-            return
+    def _target_playback_media_type_preferences(self, target_entity_id: str = "") -> list[str]:
+        eid = target_entity_id or self.target_entity_id
+        target_state = self.hass.states.get(eid) if eid else None
+        device_class = str(target_state.attributes.get("device_class", "")).lower() if target_state else ""
+        if device_class == "speaker":
+            return ["music"]
+        if device_class == "tv":
+            return ["video", "music"]
 
-        await self.hass.services.async_call(
-            "media_player",
-            "media_play_pause",
-            {"entity_id": self._target_entity_id},
-            blocking=True,
-        )
-        await self._async_mirror_to_group("media_player", "media_pause", {})
-        self.async_notify()
+        registry = er.async_get(self.hass)
+        entry = registry.async_get(eid) if eid else None
+        original_device_class = str(entry.original_device_class or "").lower() if entry else ""
+        if original_device_class == "speaker":
+            return ["music"]
+        if original_device_class == "tv":
+            return ["video", "music"]
 
-    async def async_media_play(self) -> None:
-        if not self._target_entity_id:
-            return
+        haystack = " ".join(
+            part for part in [
+                eid or "",
+                str(target_state.attributes.get("friendly_name", "")) if target_state else "",
+                str(target_state.attributes.get("app_name", "")) if target_state else "",
+                str(target_state.attributes.get("source", "")) if target_state else "",
+            ] if part
+        ).lower()
+        if any(token in haystack for token in ("tv", "chromecast_tv", "projector", "display", "monitor", "cinema")):
+            return ["video", "music"]
+        return ["music", "video"]
 
-        target_state = self._target_state_object()
-        target_media_id = target_state.attributes.get("media_content_id") if target_state else None
-
-        # If a track is already selected but the newly selected target is not holding
-        # that media item, start the known item on the selected target instead of
-        # sending a plain resume command that would no-op on many players.
-        if self._current_resolved and (
-            self._current_playback_target_entity_id != self._target_entity_id
-            or
-            target_state is None
-            or target_state.state not in {MediaPlayerState.PLAYING, MediaPlayerState.PAUSED}
-            or target_media_id != self._current_resolved.proxy_url
-        ):
-            await self._async_start_resolved_playback(self._current_resolved)
-            self._last_error = ""
-            self.async_notify()
-            return
-
-        await self.hass.services.async_call(
-            "media_player",
-            "media_play",
-            {"entity_id": self._target_entity_id},
-            blocking=True,
-        )
-        await self._async_mirror_to_group("media_player", "media_play", {})
-
-    async def async_media_stop(self) -> None:
-        if self._target_entity_id:
-            await self.hass.services.async_call(
-                "media_player",
-                "media_stop",
-                {"entity_id": self._target_entity_id},
-                blocking=True,
-            )
-            await self._async_mirror_to_group("media_player", "media_stop", {})
-
-    async def async_media_seek(self, position: float) -> None:
-        if self._target_entity_id:
-            await self.hass.services.async_call(
-                "media_player",
-                "media_seek",
-                {
-                    "entity_id": self._target_entity_id,
-                    "seek_position": max(0.0, float(position)),
-                },
-                blocking=True,
-            )
-            self.async_notify()
-
-    async def _async_rebind_target_listener(self) -> None:
-        if self._target_listener_unsub:
-            self._target_listener_unsub()
-            self._target_listener_unsub = None
-
-        if not self._target_entity_id:
-            return
-
-        self._target_listener_unsub = async_track_state_change_event(
-            self.hass,
-            [self._target_entity_id],
-            self._async_handle_target_state_change,
-        )
-
-    async def _async_handle_target_state_change(self, event: Event) -> None:
-        old_state = event.data.get("old_state")
-        new_state = event.data.get("new_state")
-        if not old_state or not new_state:
-            return
-        self.async_notify()
-        if old_state.state != MediaPlayerState.PLAYING:
-            return
-        if new_state.state not in {MediaPlayerState.IDLE, MediaPlayerState.OFF}:
-            return
-
-        if self._suppress_next_autoplay_once:
-            self._suppress_next_autoplay_once = False
-            return
-
-        if not self._should_continue_after_track() or self._advancing_autoplay:
-            return
-
-        self.hass.async_create_task(self._async_advance_autoplay())
-
-    async def _async_advance_autoplay(self) -> None:
-        if not self._should_continue_after_track() or not self._target_entity_id:
-            return
-        self._advancing_autoplay = True
-        try:
-            if self._repeat_mode == REPEAT_MODE_ONCE and self._current_resolved:
-                self._repeat_mode = REPEAT_MODE_OFF
-                await self._async_start_resolved_playback(self._current_resolved)
-                self._last_error = ""
-                self.async_notify()
-                return
-
-            next_track = await self._async_pop_next_autoplay_track()
-            if not next_track:
-                return
-            video_id = next_track.get("videoId")
-            if not video_id:
-                return
-
-            resolved = await self._async_resolve_playback(ITEM_TYPE_SONG, video_id)
-            resolved = ResolvedPlayback(
-                item_type=ITEM_TYPE_SONG,
-                item_id=video_id,
-                playable_id=resolved.playable_id,
-                title=next_track.get("title") or resolved.title,
-                artist=self._extract_artists(next_track) or resolved.artist,
-                image_url=self._extract_thumbnail(next_track) or resolved.image_url,
-                url=f"https://music.youtube.com/watch?v={video_id}",
-                stream_url=resolved.stream_url,
-                proxy_url=self._build_proxy_url(resolved.playable_id, ITEM_TYPE_SONG, video_id),
-            )
-            await self._async_start_resolved_playback(resolved)
-            await self._async_refresh_autoplay_queue(resolved.playable_id)
-            self._last_error = ""
-            self.async_notify()
-        except Exception as err:
-            self._last_error = f"Autoplay failed: {err}"
-            self.async_notify()
-            _LOGGER.exception("Autoplay advance failed")
-        finally:
-            self._advancing_autoplay = False
-
-    async def _async_pop_next_autoplay_track(self) -> dict[str, Any] | None:
-        if self._autoplay_queue:
-            return self._autoplay_queue.pop(0)
-        if self._current_resolved:
-            await self._async_refresh_autoplay_queue(self._current_resolved.playable_id)
-        if self._autoplay_queue:
-            return self._autoplay_queue.pop(0)
-        return None
-
-    async def _async_refresh_autoplay_queue(self, current_video_id: str, force: bool = False) -> None:
-        if not self._should_continue_after_track():
-            self._autoplay_queue = []
-            return
-        api = await self.async_ensure_api()
-        source_type = self._autoplay_context.get("source_type")
-        if source_type == ITEM_TYPE_PLAYLIST and self._autoplay_context.get("playlist_id"):
-            if force or not self._autoplay_queue:
-                playlist = await api.async_get_playlist(
-                    self._autoplay_context["playlist_id"],
-                    limit=25,
-                    browse_id=self._autoplay_context.get("playlist_browse_id"),
-                )
-                tracks = playlist.get("tracks") or []
-                queue = [
-                    track for track in tracks if track.get("videoId") and track.get("videoId") != current_video_id
-                ]
-                self._autoplay_queue = self._apply_queue_modes(queue)
-            return
-        queue = await api.async_get_up_next(current_video_id, limit=12)
-        if not queue and self._repeat_mode == REPEAT_MODE_FOREVER and current_video_id:
-            queue = await api.async_get_up_next(current_video_id, limit=12)
-        self._autoplay_queue = self._apply_queue_modes(queue)
-
-    def _apply_queue_modes(self, queue: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        queue = list(queue)
-        if self._shuffle_enabled and len(queue) > 1:
-            random.shuffle(queue)
-        return queue
+    # ------------------------------------------------------------------
+    # Queue helpers (used by DeviceSession._async_resolve_playback)
+    # ------------------------------------------------------------------
 
     def _pick_initial_track(self, tracks: list[dict[str, Any]]) -> dict[str, Any]:
+        """Pick the initial track from a list, using primary session shuffle setting."""
+        session = self.primary_session
+        shuffle = session._shuffle_enabled if session else False
         valid_tracks = [track for track in tracks if track.get("videoId")]
         if not valid_tracks:
             return {}
-        if self._shuffle_enabled:
+        if shuffle:
             return random.choice(valid_tracks)
         return valid_tracks[0]
 
-    def _shuffle_queue_in_place(self) -> None:
-        if self._shuffle_enabled and len(self._autoplay_queue) > 1:
-            random.shuffle(self._autoplay_queue)
-
-    def _should_continue_after_track(self) -> bool:
-        return self._autoplay_enabled or self._repeat_mode in {REPEAT_MODE_FOREVER, REPEAT_MODE_ONCE}
-
-    def _resolve_programmatic_item(self, payload: dict[str, Any]) -> tuple[str, str] | None:
-        if payload.get("song_id"):
-            return ITEM_TYPE_SONG, str(payload["song_id"])
-        if payload.get("playlist_id"):
-            return ITEM_TYPE_PLAYLIST, str(payload["playlist_id"])
-        if payload.get("artist_id"):
-            return ITEM_TYPE_ARTIST, str(payload["artist_id"])
-        if payload.get("item_type") and payload.get("item_id"):
-            return str(payload["item_type"]), str(payload["item_id"])
-        if payload.get("youtube_url"):
-            return self._parse_youtube_music_url(str(payload["youtube_url"]))
-        return None
-
-    def _parse_youtube_music_url(self, url: str) -> tuple[str, str]:
-        parsed = urlparse(url)
-        query = parse_qs(parsed.query)
-        if query.get("list"):
-            return ITEM_TYPE_PLAYLIST, query["list"][0]
-        if query.get("v"):
-            return ITEM_TYPE_SONG, query["v"][0]
-        path = parsed.path.strip("/")
-        if path.startswith("channel/"):
-            return ITEM_TYPE_ARTIST, path.split("/", 1)[1]
-        if path.startswith("browse/"):
-            browse_id = path.split("/", 1)[1]
-            if browse_id.startswith(("VL", "PL", "RD", "LM")):
-                return ITEM_TYPE_PLAYLIST, browse_id
-            return ITEM_TYPE_ARTIST, browse_id
-        raise HomeAssistantError(f"Unsupported YouTube Music URL: {url}")
+    # ------------------------------------------------------------------
+    # Utility helpers
+    # ------------------------------------------------------------------
 
     async def _async_set_programmatic_volume(self, volume_percent: int) -> None:
-        if not self._target_entity_id:
+        if not self.target_entity_id:
             raise HomeAssistantError("No target media player selected for volume control")
         await self.hass.services.async_call(
             "media_player",
             "volume_set",
             {
-                "entity_id": self._target_entity_id,
+                "entity_id": self.target_entity_id,
                 "volume_level": max(0, min(100, int(volume_percent))) / 100,
             },
             blocking=True,
@@ -1197,19 +979,53 @@ class YoutubeMusicConnectorManager:
             return f"https://music.youtube.com/channel/{artist_id}"
         return f"https://music.youtube.com/browse/{artist_id}"
 
-    def _target_state_object(self):
-        if not self._target_entity_id:
+    def _primary_target_state_object(self):
+        target = self.target_entity_id
+        if not target:
             return None
-        return self.hass.states.get(self._target_entity_id)
+        return self.hass.states.get(target)
+
+    def _primary_target_state_attr(self, key: str) -> Any:
+        state = self._primary_target_state_object()
+        if not state:
+            return None
+        return state.attributes.get(key)
 
     def _should_reset_position_on_idle(self) -> bool:
-        if not self._current_item or self._should_continue_after_track():
+        session = self.primary_session
+        if not session or not session._current_item:
+            return False
+        if session._should_continue_after_track():
             return False
         target_state = self.target_state
         return target_state in {MediaPlayerState.IDLE, MediaPlayerState.OFF}
 
-    def _target_state_attr(self, key: str) -> Any:
-        state = self._target_state_object()
-        if not state:
-            return None
-        return state.attributes.get(key)
+    def _resolve_programmatic_item(self, payload: dict[str, Any]) -> tuple[str, str] | None:
+        if payload.get("song_id"):
+            return ITEM_TYPE_SONG, str(payload["song_id"])
+        if payload.get("playlist_id"):
+            return ITEM_TYPE_PLAYLIST, str(payload["playlist_id"])
+        if payload.get("artist_id"):
+            return ITEM_TYPE_ARTIST, str(payload["artist_id"])
+        if payload.get("item_type") and payload.get("item_id"):
+            return str(payload["item_type"]), str(payload["item_id"])
+        if payload.get("youtube_url"):
+            return self._parse_youtube_music_url(str(payload["youtube_url"]))
+        return None
+
+    def _parse_youtube_music_url(self, url: str) -> tuple[str, str]:
+        parsed = urlparse(url)
+        query = parse_qs(parsed.query)
+        if query.get("list"):
+            return ITEM_TYPE_PLAYLIST, query["list"][0]
+        if query.get("v"):
+            return ITEM_TYPE_SONG, query["v"][0]
+        path = parsed.path.strip("/")
+        if path.startswith("channel/"):
+            return ITEM_TYPE_ARTIST, path.split("/", 1)[1]
+        if path.startswith("browse/"):
+            browse_id = path.split("/", 1)[1]
+            if browse_id.startswith(("VL", "PL", "RD", "LM")):
+                return ITEM_TYPE_PLAYLIST, browse_id
+            return ITEM_TYPE_ARTIST, browse_id
+        raise HomeAssistantError(f"Unsupported YouTube Music URL: {url}")

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.3 — 2026-03-21
+
+### Improved
+- **Browser Auth Assistant instructions**: `music.youtube.com` is now a clickable link, added F12 keyboard hint, added Chromium-specific step for finding Request Headers in the Network tab, and textarea placeholder now shows an example of the expected header format.
+
 ## 0.7.2 — 2026-03-21
 
 ### Fixed

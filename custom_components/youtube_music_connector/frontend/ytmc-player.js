@@ -126,12 +126,10 @@ class YtmcPlayer extends HTMLElement {
     return tid === this._attrs.target_entity_id;
   }
 
-  _syncGroupFromBackend() {
-    const backendGroup = this._attrs.group_targets || [];
-    const primary = this._attrs.target_entity_id;
-    if (this._selectedTargets.size === 0 && backendGroup.length > 0) {
-      if (primary) this._selectedTargets.add(primary);
-      backendGroup.forEach(t => this._selectedTargets.add(t));
+  _syncSelectedFromBackend() {
+    const backendSelected = this._attrs.selected_devices || [];
+    if (this._selectedTargets.size === 0 && backendSelected.length > 0) {
+      backendSelected.forEach(t => this._selectedTargets.add(t));
     }
   }
 
@@ -142,21 +140,12 @@ class YtmcPlayer extends HTMLElement {
       this._selectedTargets.add(entityId);
     } else if (this._selectedTargets.has(entityId)) {
       this._selectedTargets.delete(entityId);
-      if (this._selectedTargets.size === 0) {
-        await this._hass.callService("youtube_music_connector", "set_group_targets", { entity_id: this._entityId, group_targets: [] });
-        this._renderSig = "";
-        this._tryRender();
-        return;
-      }
     } else {
       this._selectedTargets.add(entityId);
     }
     this._recentTargets = [entityId, ...this._recentTargets.filter(t => t !== entityId)];
     const targets = [...this._selectedTargets];
-    const primary = targets[0];
-    const group = targets.slice(1);
-    await this._hass.callService("media_player", "select_source", { entity_id: this._entityId, source: primary });
-    await this._hass.callService("youtube_music_connector", "set_group_targets", { entity_id: this._entityId, group_targets: group });
+    await this._hass.callService("youtube_music_connector", "set_selected_devices", { entity_id: this._entityId, selected_devices: targets });
     this._renderSig = "";
     this._tryRender();
   }
@@ -217,7 +206,7 @@ class YtmcPlayer extends HTMLElement {
     const groupVols = this._selectedTargets.size > 1
       ? [...this._selectedTargets].map(id => this._hass?.states?.[id]?.attributes?.volume_level).join()
       : "";
-    return JSON.stringify([e.state, a.media_title, a.media_artist, a.media_image_url, tid, a.available_target_players, a.shuffle_enabled, a.repeat_mode, a.has_next_track, a.has_previous_track, a.autoplay_enabled, a.autoplay_queue_length, a.group_targets, [...this._selectedTargets].sort().join(), tState, tVol, tDur, tPosUp, groupVols]);
+    return JSON.stringify([e.state, a.media_title, a.media_artist, a.media_image_url, tid, a.available_target_players, a.shuffle_enabled, a.repeat_mode, a.has_next_track, a.has_previous_track, a.autoplay_enabled, a.autoplay_queue_length, a.selected_devices, [...this._selectedTargets].sort().join(), tState, tVol, tDur, tPosUp, groupVols]);
   }
   _tryRender() { const s = this._sig(); if (s === this._renderSig) return; this._renderSig = s; this._render(); }
 
@@ -225,7 +214,7 @@ class YtmcPlayer extends HTMLElement {
   _render() {
     const entity = this._entity;
     if (!entity) { this.shadowRoot.innerHTML = ""; return; }
-    this._syncGroupFromBackend();
+    this._syncSelectedFromBackend();
     const a = this._attrs;
     const state = this._state;
     const isGroupMode = this._selectedTargets.size > 1;

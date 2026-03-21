@@ -174,8 +174,23 @@ previous_track:
         entity:
           domain: media_player
 
+set_selected_devices:
+  description: "Set the full ordered list of selected target media players. The first device is the primary (state, next/previous track); all devices receive synchronized playback. Replaces set_group_targets."
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          domain: media_player
+    selected_devices:
+      required: true
+      selector:
+        entity:
+          domain: media_player
+          multiple: true
+
 set_group_targets:
-  description: "Set additional target media players for synchronized group playback. All play, pause, stop, and track-change operations will be mirrored to group targets."
+  description: "Deprecated: use set_selected_devices instead. Set additional target media players for synchronized group playback alongside the current primary target."
   fields:
     entity_id:
       required: true

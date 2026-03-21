@@ -27,6 +27,7 @@ from .const import (
     ATTR_QUERY,
     ATTR_REPEAT_MODE,
     ATTR_SEARCH_TYPE,
+    ATTR_SELECTED_DEVICES,
     ATTR_SHUFFLE_ENABLED,
     ATTR_SONG_ID,
     ATTR_TARGET_ENTITY_ID,
@@ -47,6 +48,7 @@ from .const import (
     SERVICE_SEARCH,
     SERVICE_SET_GROUP_TARGETS,
     SERVICE_SET_REPEAT_MODE,
+    SERVICE_SET_SELECTED_DEVICES,
     SERVICE_SET_SHUFFLE,
     SERVICE_STOP,
     SERVICE_SET_AUTOPLAY,
@@ -184,6 +186,11 @@ async def _async_register_services(hass: HomeAssistant) -> None:
         manager = _manager_from_entity_id(hass, call.data["entity_id"])
         targets = call.data.get(ATTR_GROUP_TARGETS, [])
         return await manager.async_set_group_targets(list(targets))
+
+    async def set_selected_devices_service(call: ServiceCall) -> dict[str, Any]:
+        manager = _manager_from_entity_id(hass, call.data["entity_id"])
+        devices = call.data.get(ATTR_SELECTED_DEVICES, [])
+        return await manager.async_set_selected_devices(list(devices))
 
     hass.services.async_register(
         DOMAIN,
@@ -344,6 +351,20 @@ async def _async_register_services(hass: HomeAssistant) -> None:
             {
                 vol.Required("entity_id"): cv.entity_id,
                 vol.Required(ATTR_GROUP_TARGETS): vol.All(
+                    cv.ensure_list, [cv.entity_id]
+                ),
+            }
+        ),
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_SELECTED_DEVICES,
+        set_selected_devices_service,
+        schema=vol.Schema(
+            {
+                vol.Required("entity_id"): cv.entity_id,
+                vol.Required(ATTR_SELECTED_DEVICES): vol.All(
                     cv.ensure_list, [cv.entity_id]
                 ),
             }

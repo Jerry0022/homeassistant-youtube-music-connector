@@ -290,6 +290,7 @@ class YoutubeMusicConnectorBase extends HTMLElement {
       search_type: attrs.search_type || "",
       search_count: attrs.search_count || 0,
       target_entity_id: attrs.target_entity_id || "",
+      selected_devices: attrs.selected_devices || [],
       available_target_players: attrs.available_target_players || [],
       current_item: attrs.current_item || {},
       last_error: attrs.last_error || "",
@@ -1363,9 +1364,9 @@ class YoutubeMusicConnectorBase extends HTMLElement {
   async _handleTargetSelection(value) {
     this._selectedTarget = value;
     this._persistTargetPreference(value);
-    await this._hass.callService("media_player", "select_source", {
+    await this._hass.callService("youtube_music_connector", "set_selected_devices", {
       entity_id: this.integrationEntity,
-      source: value
+      selected_devices: value ? [value] : []
     });
   }
 
@@ -2077,9 +2078,9 @@ class YoutubeMusicPlayerCard extends YoutubeMusicConnectorBase {
   }
 
   async _setTarget(value) {
-    await this._hass.callService("media_player", "select_source", {
+    await this._hass.callService("youtube_music_connector", "set_selected_devices", {
       entity_id: this.integrationEntity,
-      source: value
+      selected_devices: value ? [value] : []
     });
   }
 

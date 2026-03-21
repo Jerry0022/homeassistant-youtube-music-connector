@@ -94,7 +94,7 @@ class YoutubeMusicConnectorMediaPlayer(MediaPlayerEntity):
         return self._manager.extra_state_attributes
 
     async def async_select_source(self, source: str) -> None:
-        await self._manager.async_set_target(source)
+        await self._manager.async_set_selected_devices([source])
 
     async def async_media_pause(self) -> None:
         await self._manager.async_media_pause()

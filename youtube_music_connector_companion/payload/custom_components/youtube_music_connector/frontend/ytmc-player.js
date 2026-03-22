@@ -444,13 +444,9 @@ class YtmcPlayer extends HTMLElement {
       /* ── device chips ── */
       .device-chips {
         display: flex;
-        flex-wrap: nowrap;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none;
+        flex-wrap: wrap;
         gap: 8px;
       }
-      .device-chips::-webkit-scrollbar { display: none; }
       .dev-chip {
         all: unset;
         cursor: pointer;

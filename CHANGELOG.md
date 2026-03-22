@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.4 — 2026-03-22
+
+### Fixed
+- **Device chips wrap on mobile**: Target device chips in both player and search-play components now wrap to multiple lines instead of using a hidden horizontal scrollbar.
+
+### Added
+- **Project ship skill**: New `skills/ship/SKILL.md` extends the global completion flow with automatic patch versioning, payload sync, and GitHub Release for every ship.
+
 ## 0.7.3 — 2026-03-21
 
 ### Improved

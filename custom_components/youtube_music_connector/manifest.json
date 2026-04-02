@@ -15,7 +15,8 @@
   "iot_class": "cloud_polling",
   "requirements": [
     "pytubefix==10.3.8",
+    "nodejs-wheel-binaries>=22.20.0",
     "ytmusicapi==1.11.5"
   ],
-  "version": "0.7.4"
+  "version": "0.7.5"
 }

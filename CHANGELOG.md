@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.5 — 2026-04-03
+
+### Fixed
+- **Setup failure with pytubefix 10.x**: Added explicit `nodejs-wheel-binaries` requirement so HA Core can resolve the Node.js dependency needed for YouTube cipher decryption.
+
+### Changed
+- **Dropped 32-bit architecture support**: Removed `armhf`, `armv7`, and `i386` from add-on architectures — `nodejs-wheel-binaries` has no wheels for these platforms.
+
 ## 0.7.4 — 2026-03-22
 
 ### Fixed

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import asyncio
 import re
 import time
 from pathlib import Path
@@ -146,7 +147,7 @@ class YoutubeMusicApiClient:
         """Validate browser auth and return detailed checkpoints."""
 
         steps: list[str] = []
-        raw_headers = self._load_browser_header_file()
+        raw_headers = await self._load_browser_header_file()
         steps.append("Header file found.")
 
         headers = self._normalize_browser_headers(raw_headers)
@@ -184,12 +185,12 @@ class YoutubeMusicApiClient:
             raise HomeAssistantError(f"Could not initialize YTMusic client: {err}") from err
         return self._ytmusic
 
-    def _load_browser_header_file(self) -> dict[str, Any]:
-        if not self.header_path.exists():
+    async def _load_browser_header_file(self) -> dict[str, Any]:
+        if not await asyncio.to_thread(self.header_path.exists):
             raise HomeAssistantError(f"Header file not found: {self.header_path}")
 
         try:
-            payload = json.loads(self.header_path.read_text(encoding="utf-8"))
+            payload = json.loads(await asyncio.to_thread(self.header_path.read_text, encoding="utf-8"))
         except json.JSONDecodeError as err:
             raise HomeAssistantError(f"Header file is not valid JSON: {err.msg}") from err
 
@@ -246,7 +247,7 @@ class YoutubeMusicApiClient:
         if self._headers_cache is not None:
             return dict(self._headers_cache)
 
-        payload = self._load_browser_header_file()
+        payload = await self._load_browser_header_file()
         headers = self._normalize_browser_headers(payload)
         headers = await self._finalize_headers(headers)
         self._headers_cache = headers

@@ -71,7 +71,7 @@ _MARKER_CHECK_INTERVAL = timedelta(seconds=60)
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
-    _log_runtime_diagnostics()
+    await hass.async_add_executor_job(_log_runtime_diagnostics)
     hass.data.setdefault(DOMAIN, {})
     return True
 
@@ -105,7 +105,7 @@ def _create_restart_repair_issue(hass: HomeAssistant, version: str) -> None:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry) -> bool:
-    _log_runtime_diagnostics()
+    await hass.async_add_executor_job(_log_runtime_diagnostics)
 
     # Dismiss stale restart prompts — if this code is loading, the restart already happened
     ir.async_delete_issue(hass, DOMAIN, "restart_required")

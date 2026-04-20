@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.11 — 2026-04-20
+
+### Fixed
+- **Add-on build failure on Docker 29 / strict BuildKit**: The companion add-on Dockerfile declared `ARG BUILD_FROM` without a default, and the repo shipped no `build.yaml`, so Supervisor invoked `docker buildx build` without a `--build-arg BUILD_FROM=…` — stricter BuildKit versions reject the empty base image with `InvalidDefaultArgInFrom: base name ($BUILD_FROM) should not be blank`. Added `youtube_music_connector_companion/build.yaml` mapping `aarch64` and `amd64` to `ghcr.io/home-assistant/{arch}-base:3.19` so Supervisor can resolve the base image again.
+
 ## 0.7.10 — 2026-04-20
 
 ### Fixed

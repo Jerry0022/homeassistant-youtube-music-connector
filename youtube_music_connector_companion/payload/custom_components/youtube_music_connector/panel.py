@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from homeassistant.components import panel_custom
-from homeassistant.components.frontend import add_extra_js_url
-from homeassistant.components.http import StaticPathConfig
 from homeassistant.core import HomeAssistant
+
+from ha_customapps.panel import PanelRegistrar
 
 from .const import (
     DOMAIN,
+    FRONTEND_CACHE_VERSION,
     PANEL_COMPONENT_NAME,
     PANEL_ICON,
     PANEL_MODULE_PATH,
@@ -16,38 +17,27 @@ from .const import (
     PANEL_URL_PATH,
 )
 
-STATIC_BASE = "/api/youtube_music_connector/static"
+STATIC_BASE = f"/api/{DOMAIN}/static"
 LOVELACE_COMPONENTS = [
-    f"{STATIC_BASE}/ytmc-player.js",
-    f"{STATIC_BASE}/ytmc-search-play.js",
+    f"{STATIC_BASE}/ytmc-player.js?v={FRONTEND_CACHE_VERSION}",
+    f"{STATIC_BASE}/ytmc-search-play.js?v={FRONTEND_CACHE_VERSION}",
 ]
 
 
 async def async_register_panel(hass: HomeAssistant) -> None:
     """Register custom sidebar panel."""
-    await hass.http.async_register_static_paths(
-        [
-            StaticPathConfig(
-                "/api/youtube_music_connector/static",
-                hass.config.path("custom_components", DOMAIN, "frontend"),
-                True,
-            )
-        ]
-    )
-
-    await panel_custom.async_register_panel(
+    registrar = PanelRegistrar(
         hass,
-        webcomponent_name=PANEL_COMPONENT_NAME,
-        frontend_url_path=PANEL_URL_PATH,
+        DOMAIN,
+        panel_component=PANEL_COMPONENT_NAME,
+        panel_title=PANEL_TITLE,
+        panel_icon=PANEL_ICON,
+        panel_url_path=PANEL_URL_PATH,
         module_url=PANEL_MODULE_PATH,
-        sidebar_title=PANEL_TITLE,
-        sidebar_icon=PANEL_ICON,
-        require_admin=False,
-        config={"domain": DOMAIN},
+        frontend_dir=hass.config.path("custom_components", DOMAIN, "frontend"),
+        lovelace_urls=LOVELACE_COMPONENTS,
     )
-
-    for url in LOVELACE_COMPONENTS:
-        add_extra_js_url(hass, url)
+    await registrar.async_register()
 
 
 async def async_unregister_panel(hass: HomeAssistant) -> None:

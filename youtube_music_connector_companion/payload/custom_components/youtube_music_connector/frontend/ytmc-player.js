@@ -153,6 +153,9 @@ class YtmcPlayer extends HTMLElement {
     } else {
       this._selectedTargets.add(entityId);
     }
+    // Reset sticky visibility flags so new target starts clean
+    this._seenTrack = false;
+    this._seenDuration = false;
     this._recentTargets = [entityId, ...this._recentTargets.filter(t => t !== entityId)];
     const targets = [...this._selectedTargets];
     await this._hass.callService("youtube_music_connector", "set_selected_devices", { entity_id: this._entityId, selected_devices: targets });
@@ -211,7 +214,10 @@ class YtmcPlayer extends HTMLElement {
     await this._hass.callService("media_player", "media_seek", { entity_id: tid, seek_position: pos });
   }
 
-  /* ── render gate ── */
+  /* ── render gate ──
+   * Structural sig: only keys that change layout/DOM structure.
+   * Volume + position are updated in-place (no re-render) via tickers/_syncDynamic.
+   */
   _sig() {
     const e = this._entity;
     if (!e) return "";
@@ -219,16 +225,43 @@ class YtmcPlayer extends HTMLElement {
     const tid = a.target_entity_id;
     const t = tid ? this._hass?.states?.[tid] : null;
     const tState = t?.state;
-    const tVol = t?.attributes?.volume_level;
-    const tDur = t?.attributes?.media_duration;
-    const tPosUp = t?.attributes?.media_position_updated_at;
-    const selectedDevices = a.selected_devices || [];
-    const groupVols = selectedDevices.length > 1
-      ? selectedDevices.map(id => this._hass?.states?.[id]?.attributes?.volume_level).join()
-      : "";
-    return JSON.stringify([e.state, a.media_title, a.media_artist, a.media_image_url, tid, a.available_target_players, a.shuffle_enabled, a.repeat_mode, a.has_next_track, a.has_previous_track, a.autoplay_enabled, a.autoplay_queue_length, a.selected_devices, tState, tVol, tDur, tPosUp, groupVols]);
+    const tFeat = parseInt(t?.attributes?.supported_features || 0);
+    const tHasDur = typeof t?.attributes?.media_duration === "number";
+    return JSON.stringify([e.state, a.media_title, a.media_artist, a.media_image_url, tid, a.available_target_players, a.shuffle_enabled, a.repeat_mode, a.has_next_track, a.has_previous_track, a.autoplay_enabled, a.autoplay_queue_length, a.selected_devices, tState, tFeat, tHasDur]);
   }
-  _tryRender() { const s = this._sig(); if (s === this._renderSig) return; this._renderSig = s; this._render(); }
+  _tryRender() {
+    const s = this._sig();
+    if (s === this._renderSig) {
+      // No structural change — just update dynamic values in place.
+      this._syncDynamic();
+      return;
+    }
+    this._renderSig = s;
+    this._render();
+  }
+
+  /* Update volume + progress + play icon without full DOM teardown. */
+  _syncDynamic() {
+    const root = this.shadowRoot;
+    if (!root) return;
+    const a = this._attrs;
+    const tid = a.target_entity_id;
+    const target = tid ? this._hass?.states?.[tid] : null;
+    const isGroupMode = this._selectedTargets.size > 1;
+    const vol = target?.attributes?.volume_level;
+    const volPct = isGroupMode ? this._groupVolumePct() : (vol != null ? Math.round(vol * 100) : 50);
+    const slider = root.querySelector(".vol-slider");
+    const wrap = root.querySelector(".vol-wrap");
+    if (slider && document.activeElement !== slider) {
+      slider.value = volPct;
+      if (wrap) wrap.style.setProperty("--vol-fill", `${volPct}%`);
+    }
+    const volIcon = root.querySelector(".volume ha-icon");
+    if (volIcon) volIcon.setAttribute("icon", volPct === 0 ? "mdi:volume-off" : volPct < 50 ? "mdi:volume-medium" : "mdi:volume-high");
+    this._updateProgress();
+    const playIcon = root.querySelector(".play-btn ha-icon");
+    if (playIcon) playIcon.setAttribute("icon", this._isPlaying ? "mdi:pause" : "mdi:play");
+  }
 
   /* ── render ── */
   _render() {
@@ -255,14 +288,18 @@ class YtmcPlayer extends HTMLElement {
     const tid = a.target_entity_id;
     const target = tid ? this._hass?.states?.[tid] : null;
     const vol = target?.attributes?.volume_level;
-    const supportsVolume = isGroupMode ? this._allActiveTargets().length > 0 : target && (parseInt(target.attributes?.supported_features || 0) & 4);
-    const supportsSeek = !isGroupMode && target && (parseInt(target.attributes?.supported_features || 0) & 16);
+    const supportsVolume = isGroupMode ? this._allActiveTargets().length > 0 : !!(target && (parseInt(target.attributes?.supported_features || 0) & 4));
+    const supportsSeek = !isGroupMode && !!(target && (parseInt(target.attributes?.supported_features || 0) & 16));
     const volPct = isGroupMode ? this._groupVolumePct() : (vol != null ? Math.round(vol * 100) : 50);
-    // Detect if target is playing something (even if not from this connector)
     const targetState = target?.state;
     const targetIsPlaying = targetState === "playing" || targetState === "paused";
-    const targetDur = target?.attributes?.media_duration;
     const hasTrack = !!title;
+    // Sticky flags: once we've seen a track or progress, keep them visible through
+    // transient state flips (buffering, next-track gaps). Avoids flashing in/out.
+    if (hasTrack || targetIsPlaying) this._seenTrack = true;
+    if (dur) this._seenDuration = true;
+    const showControls = hasTrack || targetIsPlaying || this._selectedTargets.size > 0 || this._seenTrack;
+    const showProgress = !isGroupMode && (dur || this._seenDuration);
 
     // Device selector options
     const sources = (a.available_target_players || []).filter(s => !this._excludeDevices.includes(s));
@@ -279,7 +316,9 @@ class YtmcPlayer extends HTMLElement {
             ${supportsVolume ? `
             <div class="volume">
               <ha-icon icon="${volPct === 0 ? "mdi:volume-off" : volPct < 50 ? "mdi:volume-medium" : "mdi:volume-high"}"></ha-icon>
-              <input type="range" class="vol-slider" min="0" max="100" value="${volPct}" data-action="volume" />
+              <div class="vol-wrap" style="--vol-fill:${volPct}%">
+                <input type="range" class="vol-slider" min="0" max="100" value="${volPct}" data-action="volume" />
+              </div>
             </div>` : ""}
           </div>
 
@@ -289,26 +328,18 @@ class YtmcPlayer extends HTMLElement {
             <div class="track-subtitle">${this._esc(artist) || "\u00A0"}</div>
           </div>` : ""}
 
-          ${hasTrack || targetIsPlaying || this._selectedTargets.size > 0 ? `
+          ${showControls ? `
           <div class="controls-row">
-            ${hasTrack ? `
             <div class="transport">
               <button class="transport-btn ${hasPrev ? '' : 'disabled'}" data-action="prev" title="Previous"><ha-icon icon="mdi:skip-previous"></ha-icon></button>
-              <button class="transport-btn play-btn" data-action="playpause" title="${this._isPlaying ? "Pause" : "Play"}">
-                <ha-icon icon="${this._isPlaying ? "mdi:pause" : "mdi:play"}"></ha-icon>
+              <button class="transport-btn play-btn" data-action="playpause" title="${(this._isPlaying || targetState === 'playing') ? "Pause" : "Play"}">
+                <ha-icon icon="${(this._isPlaying || targetState === 'playing') ? "mdi:pause" : "mdi:play"}"></ha-icon>
               </button>
               <button class="transport-btn ${hasNext ? '' : 'disabled'}" data-action="next" title="Next"><ha-icon icon="mdi:skip-next"></ha-icon></button>
-            </div>` : `
-            <div class="transport">
-              <button class="transport-btn ${hasPrev ? '' : 'disabled'}" data-action="prev" title="Previous"><ha-icon icon="mdi:skip-previous"></ha-icon></button>
-              <button class="transport-btn play-btn" data-action="playpause" title="${targetState === "playing" ? "Pause" : "Play"}">
-                <ha-icon icon="${targetState === "playing" ? "mdi:pause" : "mdi:play"}"></ha-icon>
-              </button>
-              <button class="transport-btn ${hasNext ? '' : 'disabled'}" data-action="next" title="Next"><ha-icon icon="mdi:skip-next"></ha-icon></button>
-            </div>`}
+            </div>
           </div>` : ""}
 
-          ${(this._isActive || targetIsPlaying) && dur && !isGroupMode ? `
+          ${showProgress ? `
           <div class="progress-row">
             <span class="pos-current">${this._fmtTime(pos)}</span>
             <div class="progress-track ${supportsSeek ? "" : "no-seek"}" ${supportsSeek ? 'data-action="seek"' : ""}>
@@ -373,7 +404,13 @@ class YtmcPlayer extends HTMLElement {
       else if (action === "autoplay") el.addEventListener("click", () => this._setAutoplay(!this._attrs.autoplay_enabled));
       else if (action === "shuffle") el.addEventListener("click", () => this._setShuffle(!this._attrs.shuffle_enabled));
       else if (action === "repeat") el.addEventListener("click", () => this._cycleRepeat());
-      else if (action === "volume") el.addEventListener("change", (e) => this._setVolume(Number(e.target.value)));
+      else if (action === "volume") {
+        el.addEventListener("input", (e) => {
+          const wrap = e.target.closest(".vol-wrap");
+          if (wrap) wrap.style.setProperty("--vol-fill", `${e.target.value}%`);
+        });
+        el.addEventListener("change", (e) => this._setVolume(Number(e.target.value)));
+      }
       else if (action === "seek") el.addEventListener("click", (e) => {
         const rect = el.getBoundingClientRect();
         const dur = this._mediaDuration();
@@ -573,15 +610,54 @@ class YtmcPlayer extends HTMLElement {
         flex-shrink: 0;
       }
       .volume ha-icon { --mdc-icon-size: 20px; }
+      .vol-wrap {
+        position: relative;
+        width: 110px;
+        height: 16px;
+        display: flex;
+        align-items: center;
+      }
+      .vol-wrap::before,
+      .vol-wrap::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 50%;
+        height: 5px;
+        border-radius: 3px;
+        transform: translateY(-50%);
+        pointer-events: none;
+      }
+      .vol-wrap::before {
+        width: 100%;
+        background: rgba(255,255,255,0.18);
+      }
+      .vol-wrap::after {
+        width: var(--vol-fill, 50%);
+        background: var(--_accent);
+        transition: width 0.08s linear;
+      }
       .vol-slider {
         -webkit-appearance: none;
         appearance: none;
-        width: 110px;
-        height: 5px;
-        border-radius: 3px;
-        background: rgba(255,255,255,0.12);
+        position: relative;
+        z-index: 1;
+        width: 100%;
+        height: 16px;
+        background: transparent;
         outline: none;
         cursor: pointer;
+        margin: 0;
+        padding: 0;
+      }
+      .vol-slider::-webkit-slider-runnable-track {
+        height: 5px;
+        background: transparent;
+      }
+      .vol-slider::-moz-range-track {
+        height: 5px;
+        background: transparent;
+        border: none;
       }
       .vol-slider::-webkit-slider-thumb {
         -webkit-appearance: none;
@@ -590,6 +666,9 @@ class YtmcPlayer extends HTMLElement {
         background: var(--_accent);
         box-shadow: 0 2px 8px rgba(74,158,255,0.35);
         cursor: pointer;
+        margin-top: -5.5px;
+        position: relative;
+        z-index: 2;
       }
       .vol-slider::-moz-range-thumb {
         width: 16px; height: 16px;

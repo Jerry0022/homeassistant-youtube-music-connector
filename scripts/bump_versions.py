@@ -17,7 +17,7 @@ ADDON_CONFIG_PATH = REPO_ROOT / "youtube_music_connector_companion" / "config.ya
 CONST_PATH = REPO_ROOT / "custom_components" / "youtube_music_connector" / "const.py"
 VERSION_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
 ADDON_VERSION_RE = re.compile(r'^(version:\s*")(\d+\.\d+\.\d+)(")$', re.MULTILINE)
-PANEL_VERSION_RE = re.compile(r'(PANEL_MODULE_PATH\s*=\s*".*?\?v=)([^"]+)(")')
+PANEL_VERSION_RE = re.compile(r'(FRONTEND_CACHE_VERSION\s*=\s*")([^"]+)(")')
 
 
 def parse_version(raw: str) -> tuple[int, int, int]:

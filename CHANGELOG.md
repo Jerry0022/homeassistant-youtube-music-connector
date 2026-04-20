@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.10 — 2026-04-20
+
+### Fixed
+- **Volume slider fill in now-playing card**: The colored fill portion of the volume slider was invisible on Chromium (only a blue thumb on a grey track). Reworked the slider with a pseudo-element wrapper so the accent-colored fill renders reliably cross-browser.
+- **Lovelace asset cache-busting**: `ytmc-player.js` and `ytmc-search-play.js` were loaded without a version query, so browsers served stale copies indefinitely. Both URLs now carry `?v=<FRONTEND_CACHE_VERSION>` and the version is bumped automatically by `scripts/bump_versions.py`.
+- **Flickering progress bar and play button**: Every HA state tick (including `media_position_updated_at`) forced a full DOM teardown, and transient state flips during buffering / next-track could unmount controls and the progress row. Structural sig now excludes high-frequency fields; volume, position and play-icon updates happen in-place via a new `_syncDynamic` path; sticky visibility flags keep controls and the progress bar mounted through short gaps.
+
 ## 0.7.5 — 2026-04-03
 
 ### Fixed

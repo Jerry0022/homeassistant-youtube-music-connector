@@ -14,9 +14,10 @@
   "documentation": "https://github.com/Jerry0022/homeassistant-youtube-music-connector",
   "iot_class": "cloud_polling",
   "requirements": [
+    "ha-customapps>=0.3.0",
     "pytubefix==10.3.8",
     "nodejs-wheel-binaries>=22.20.0",
     "ytmusicapi==1.11.5"
   ],
-  "version": "0.7.5"
+  "version": "0.7.10"
 }

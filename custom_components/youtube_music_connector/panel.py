@@ -9,6 +9,7 @@ from ha_customapps.panel import PanelRegistrar
 
 from .const import (
     DOMAIN,
+    FRONTEND_CACHE_VERSION,
     PANEL_COMPONENT_NAME,
     PANEL_ICON,
     PANEL_MODULE_PATH,
@@ -18,8 +19,8 @@ from .const import (
 
 STATIC_BASE = f"/api/{DOMAIN}/static"
 LOVELACE_COMPONENTS = [
-    f"{STATIC_BASE}/ytmc-player.js",
-    f"{STATIC_BASE}/ytmc-search-play.js",
+    f"{STATIC_BASE}/ytmc-player.js?v={FRONTEND_CACHE_VERSION}",
+    f"{STATIC_BASE}/ytmc-search-play.js?v={FRONTEND_CACHE_VERSION}",
 ]
 
 
